@@ -1,0 +1,13 @@
+build/
+cmake-build-*/
+*.user
+.vscode/
+.idea/
+
+*.o
+*.a
+*.so*
+*.deb
+*.AppImage
+
+/tmp/

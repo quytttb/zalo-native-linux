@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Zalo Native — renderer bridge demo</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #0e1015;
+            --surface: #141821;
+            --surface-alt: #1b2130;
+            --border: #252c3b;
+            --text: #e9edf5;
+            --muted: #98a2b3;
+            --accent: #3d6dff;
+            --ok: #37d07f;
+            --warn: #f0b657;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 32px;
+            background: var(--bg);
+            color: var(--text);
+            font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        }
+
+        main {
+            width: min(760px, 100%);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+        }
+
+        h1 {
+            margin: 0 0 4px;
+            font-size: 20px;
+            letter-spacing: -0.01em;
+        }
+
+        p.lead {
+            margin: 0 0 20px;
+            color: var(--muted);
+        }
+
+        .status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: var(--surface-alt);
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--warn);
+            transition: background 160ms ease;
+        }
+
+        .dot.online { background: var(--ok); }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+            margin: 20px 0;
+        }
+
+        .card {
+            padding: 14px 16px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: var(--surface-alt);
+        }
+
+        .card h2 {
+            margin: 0 0 6px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .card code, .card span.value {
+            font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+            font-size: 12px;
+            word-break: break-all;
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 8px;
+        }
+
+        button {
+            padding: 9px 16px;
+            border: 0;
+            border-radius: 10px;
+            background: var(--accent);
+            color: #fff;
+            font: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        button.secondary {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        button:hover { filter: brightness(1.08); }
+
+        pre {
+            margin: 20px 0 0;
+            padding: 14px;
+            max-height: 240px;
+            overflow: auto;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: #0a0c11;
+            color: var(--muted);
+            font-size: 11.5px;
+            white-space: pre-wrap;
+        }
+
+        footer {
+            margin-top: 20px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+            color: var(--muted);
+            font-size: 11.5px;
+        }
+    </style>
+</head>
+<body>
+<main>
+    <h1>Renderer bridge</h1>
+    <p class="lead">
+        Trang tĩnh này chỉ kiểm tra kênh JSON giữa web renderer và shell Qt.
+        Nó không đăng nhập, không tải mã Zalo và không chứa dữ liệu thật.
+    </p>
+
+    <div class="status">
+        <span class="dot" id="status-dot"></span>
+        <span id="status-text">Đang kết nối QWebChannel…</span>
+    </div>
+
+    <div class="grid">
+        <div class="card">
+            <h2>Native ping</h2>
+            <span class="value" id="ping">—</span>
+        </div>
+        <div class="card">
+            <h2>Bridge protocol</h2>
+            <span class="value" id="protocol">—</span>
+        </div>
+        <div class="card">
+            <h2>Runtime</h2>
+            <span class="value" id="runtime">—</span>
+        </div>
+        <div class="card">
+            <h2>State snapshot</h2>
+            <span class="value" id="snapshot">—</span>
+        </div>
+    </div>
+
+    <div class="actions">
+        <button id="ping-button">Gọi app.ping</button>
+        <button id="publish-button" class="secondary">Publish trang demo</button>
+        <button id="log-button" class="secondary">Ghi log</button>
+    </div>
+
+    <pre id="output">Chưa có phản hồi.</pre>
+
+    <footer>
+        Mốc 0: chỉ kiểm tra bridge. Không phải giao diện Zalo và không kết nối tài khoản.
+    </footer>
+</main>
+
+<script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+<script src="stub.js"></script>
+</body>
+</html>

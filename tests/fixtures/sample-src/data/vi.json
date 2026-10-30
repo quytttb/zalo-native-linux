@@ -1,0 +1,7 @@
+{
+  "locale": "vi-VN",
+  "strings": {
+    "hello": "Xin chào",
+    "fixture": true
+  }
+}

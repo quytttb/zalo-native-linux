@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Zalo Native
+GenericName=Experimental Zalo shell
+Comment=Native Qt 6/QML shell and runtime tooling for an experimental Zalo desktop client
+Exec=zalonative %U
+Icon=io.github.quytttb.ZaloNative
+Terminal=false
+Categories=Network;InstantMessaging;Qt;
+Keywords=zalo;chat;messaging;
+StartupNotify=true
+StartupWMClass=zalonative
+X-GNOME-UsesNotifications=true

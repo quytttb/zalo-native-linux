@@ -1,0 +1,8 @@
+{
+  "name": "sample-zalo-runtime",
+  "version": "9.9.9-demo",
+  "main": "main.js",
+  "devDependencies": {
+    "electron": "39.0.0-demo"
+  }
+}

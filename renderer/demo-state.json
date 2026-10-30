@@ -1,0 +1,270 @@
+{
+  "source": "bundled-demo",
+  "generatedAt": "2026-10-30T09:00:00Z",
+  "conversations": [
+    {
+      "id": "demo-sao-mai",
+      "title": "Nhóm Dự án Sao Mai",
+      "snippet": "Lan: Mình đã đẩy bản nháp lên thư mục chung.",
+      "time": "09:41",
+      "unread": 3,
+      "pinned": true,
+      "muted": false,
+      "online": true,
+      "avatarText": "SM",
+      "avatarColor": "#3D6DFF",
+      "lastActivityTs": 1793266860
+    },
+    {
+      "id": "demo-lan",
+      "title": "Lan Nguyễn",
+      "snippet": "Chiều nay bạn rảnh không?",
+      "time": "09:32",
+      "unread": 1,
+      "pinned": false,
+      "muted": false,
+      "online": true,
+      "avatarText": "LN",
+      "avatarColor": "#C24B8B",
+      "lastActivityTs": 1793266320
+    },
+    {
+      "id": "demo-minh",
+      "title": "Minh Trần",
+      "snippet": "Bạn: Mai mình gửi bản tổng hợp nhé.",
+      "time": "Hôm qua",
+      "unread": 0,
+      "pinned": true,
+      "muted": false,
+      "online": false,
+      "avatarText": "MT",
+      "avatarColor": "#0FA3A3",
+      "lastActivityTs": 1793188800
+    },
+    {
+      "id": "demo-gia-dinh",
+      "title": "Gia đình",
+      "snippet": "Mẹ: Tối nay ăn cơm ở nhà nhé.",
+      "time": "Hôm qua",
+      "unread": 12,
+      "pinned": false,
+      "muted": true,
+      "online": false,
+      "avatarText": "GĐ",
+      "avatarColor": "#4C8C3F",
+      "lastActivityTs": 1793185200
+    },
+    {
+      "id": "demo-anh",
+      "title": "Câu lạc bộ ảnh Hà Nội",
+      "snippet": "Khoa: Ảnh phố cổ sáng nay đẹp quá.",
+      "time": "T2",
+      "unread": 0,
+      "pinned": false,
+      "muted": false,
+      "online": false,
+      "avatarText": "CL",
+      "avatarColor": "#D96C3B",
+      "lastActivityTs": 1792944000
+    },
+    {
+      "id": "demo-khoa",
+      "title": "Anh Khoa (giao hàng)",
+      "snippet": "Bạn: Cảm ơn anh, mình nhận được rồi.",
+      "time": "T2",
+      "unread": 0,
+      "pinned": false,
+      "muted": false,
+      "online": false,
+      "avatarText": "AK",
+      "avatarColor": "#5A6B8C",
+      "lastActivityTs": 1792938000
+    },
+    {
+      "id": "demo-he-thong",
+      "title": "Zalo Native Beta",
+      "snippet": "Đây là dữ liệu demo, không phải tài khoản thật.",
+      "time": "20/10",
+      "unread": 0,
+      "pinned": false,
+      "muted": false,
+      "online": false,
+      "avatarText": "ZN",
+      "avatarColor": "#7C5CFF",
+      "lastActivityTs": 1792454400
+    }
+  ],
+  "messages": {
+    "demo-sao-mai": [
+      {
+        "id": "sm-1",
+        "sender": "Lan Nguyễn",
+        "text": "Chào cả nhà, mình vừa cập nhật bản nháp của tài liệu kiến trúc.",
+        "time": "09:12",
+        "outgoing": false,
+        "status": "read",
+        "kind": "text"
+      },
+      {
+        "id": "sm-2",
+        "sender": "Minh Trần",
+        "text": "Phần mô tả lựa chọn công nghệ đọc rõ rồi. Có nên thêm mục rủi ro pháp lý không?",
+        "time": "09:20",
+        "outgoing": false,
+        "status": "read",
+        "kind": "text"
+      },
+      {
+        "id": "sm-3",
+        "sender": "Bạn",
+        "text": "Nên thêm. Mình sẽ bổ sung phần giới hạn trách nhiệm và điều khoản sử dụng tài khoản.",
+        "time": "09:26",
+        "outgoing": true,
+        "status": "read",
+        "kind": "text"
+      },
+      {
+        "id": "sm-4",
+        "sender": "Lan Nguyễn",
+        "text": "Mình đính kèm bản nháp để mọi người đọc trước.",
+        "time": "09:38",
+        "outgoing": false,
+        "status": "read",
+        "kind": "file",
+        "attachmentName": "kien-truc-ban-nhap.pdf",
+        "attachmentSize": 248320
+      },
+      {
+        "id": "sm-5",
+        "sender": "Lan Nguyễn",
+        "text": "Mình đã đẩy bản nháp lên thư mục chung.",
+        "time": "09:41",
+        "outgoing": false,
+        "status": "read",
+        "kind": "text"
+      }
+    ],
+    "demo-lan": [
+      {
+        "id": "lan-1",
+        "sender": "Lan Nguyễn",
+        "text": "Chiều nay bạn rảnh không?",
+        "time": "09:30",
+        "outgoing": false,
+        "status": "read",
+        "kind": "text"
+      },
+      {
+        "id": "lan-2",
+        "sender": "Lan Nguyễn",
+        "text": "Mình muốn nhờ bạn xem qua phần giao diện trước khi gửi cho nhóm.",
+        "time": "09:32",
+        "outgoing": false,
+        "status": "read",
+        "kind": "text"
+      },
+      {
+        "id": "lan-3",
+        "sender": "Bạn",
+        "text": "Được, khoảng 15 giờ mình gọi lại nhé.",
+        "time": "09:34",
+        "outgoing": true,
+        "status": "sent",
+        "kind": "text"
+      }
+    ],
+    "demo-minh": [
+      {
+        "id": "minh-1",
+        "sender": "Minh Trần",
+        "text": "Bản tổng hợp tuần này đã có số liệu mới chưa?",
+        "time": "Hôm qua 20:14",
+        "outgoing": false,
+        "status": "read",
+        "kind": "text"
+      },
+      {
+        "id": "minh-2",
+        "sender": "Bạn",
+        "text": "Mai mình gửi bản tổng hợp nhé. Còn thiếu phần chi phí hạ tầng.",
+        "time": "Hôm qua 20:18",
+        "outgoing": true,
+        "status": "read",
+        "kind": "text"
+      }
+    ],
+    "demo-gia-dinh": [
+      {
+        "id": "gd-1",
+        "sender": "Mẹ",
+        "text": "Tối nay ăn cơm ở nhà nhé.",
+        "time": "Hôm qua 17:05",
+        "outgoing": false,
+        "status": "read",
+        "kind": "text"
+      },
+      {
+        "id": "gd-2",
+        "sender": "Bố",
+        "text": "Nhớ mua thêm ít hoa quả.",
+        "time": "Hôm qua 17:08",
+        "outgoing": false,
+        "status": "read",
+        "kind": "text"
+      }
+    ],
+    "demo-anh": [
+      {
+        "id": "anh-1",
+        "sender": "Khoa",
+        "text": "Ảnh phố cổ sáng nay đẹp quá.",
+        "time": "T2 08:12",
+        "outgoing": false,
+        "status": "read",
+        "kind": "image",
+        "attachmentName": "pho-co-sang-som.jpg",
+        "attachmentSize": 1843200
+      },
+      {
+        "id": "anh-2",
+        "sender": "Bạn",
+        "text": "Ánh sáng đẹp thật. Lần sau mình thử chụp sớm hơn nữa.",
+        "time": "T2 08:20",
+        "outgoing": true,
+        "status": "read",
+        "kind": "text"
+      }
+    ],
+    "demo-khoa": [
+      {
+        "id": "khoa-1",
+        "sender": "Anh Khoa (giao hàng)",
+        "text": "Đơn hàng của bạn đã được giao cho lễ tân.",
+        "time": "T2 14:02",
+        "outgoing": false,
+        "status": "read",
+        "kind": "text"
+      },
+      {
+        "id": "khoa-2",
+        "sender": "Bạn",
+        "text": "Cảm ơn anh, mình nhận được rồi.",
+        "time": "T2 14:10",
+        "outgoing": true,
+        "status": "read",
+        "kind": "text"
+      }
+    ],
+    "demo-he-thong": [
+      {
+        "id": "ht-1",
+        "sender": "Zalo Native Beta",
+        "text": "Đây là dữ liệu demo, không phải tài khoản thật. Ứng dụng chưa đăng nhập và chưa kết nối tới Zalo.",
+        "time": "20/10 10:00",
+        "outgoing": false,
+        "status": "read",
+        "kind": "text"
+      }
+    ]
+  }
+}
