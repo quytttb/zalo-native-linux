@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(ZaloNative
-    VERSION 0.1.0
+    VERSION 1.0.0
     DESCRIPTION "Native Qt 6/QML shell and runtime tooling for an experimental Zalo desktop client on Linux"
     LANGUAGES CXX)
 
