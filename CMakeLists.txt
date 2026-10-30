@@ -20,6 +20,7 @@ include(CTest)
 option(ZALO_BUILD_TESTS "Build the test suite" ON)
 option(ZALO_ENABLE_SANITIZERS "Build with AddressSanitizer/UBSan (GCC/Clang only)" OFF)
 option(ZALO_WEBENGINE "Build the optional Qt WebEngine renderer host" ON)
+option(ZALO_BUILD_QR_PROBE "Build the archived experimental QR probe (historical reference only)" OFF)
 
 if(ZALO_ENABLE_SANITIZERS AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
@@ -44,6 +45,14 @@ endif()
 add_subdirectory(src/core)
 add_subdirectory(src/cli)
 
+if(ZALO_BUILD_QR_PROBE)
+    find_package(Qt6 6.5 REQUIRED COMPONENTS Widgets)
+    find_package(OpenSSL REQUIRED COMPONENTS Crypto)
+    add_executable(zalo-qr-probe src/probe/main.cpp src/probe/QrProtocol.cpp src/probe/QrProtocol.h
+                   src/probe/ProtocolCrypto.cpp src/probe/ProtocolCrypto.h)
+    target_link_libraries(zalo-qr-probe PRIVATE Qt6::Widgets Qt6::Network OpenSSL::Crypto)
+endif()
+
 # ---------------------------------------------------------------------------
 # Native shell
 # ---------------------------------------------------------------------------
@@ -59,10 +68,12 @@ set(APP_QML_FILES
     qml/Icon.qml
     qml/IconButton.qml
     qml/DiagnosticsDialog.qml
+    qml/RuntimeShell.qml
+    qml/WebUnavailable.qml
 )
 
 if(ZALO_HAVE_WEBENGINE)
-    list(APPEND APP_QML_FILES qml/RendererHost.qml)
+    list(APPEND APP_QML_FILES qml/RendererHost.qml qml/WebShell.qml)
 endif()
 
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
@@ -99,6 +110,22 @@ target_compile_definitions(zalonative PRIVATE ZALO_VERSION="${PROJECT_VERSION}")
 if(ZALO_HAVE_WEBENGINE)
     target_link_libraries(zalonative PRIVATE Qt6::WebEngineQuick Qt6::WebChannel)
     target_compile_definitions(zalonative PRIVATE ZALO_HAVE_WEBENGINE=1)
+endif()
+
+# ---------------------------------------------------------------------------
+# Bootstrap probe (diagnostic only; injects no host APIs and never logs in)
+# ---------------------------------------------------------------------------
+
+if(ZALO_HAVE_WEBENGINE)
+    add_executable(zalo-bootstrap-probe tools/bootstrap-probe/main.cpp)
+    target_link_libraries(zalo-bootstrap-probe PRIVATE
+        zalonative_core
+        Qt6::Gui
+        Qt6::WebEngineQuick
+        Qt6::WebChannel
+    )
+    target_compile_definitions(zalo-bootstrap-probe PRIVATE
+        ZALO_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 endif()
 
 install(TARGETS zalonative RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

@@ -32,19 +32,42 @@ class AppController : public QObject
 
     Q_PROPERTY(QString runtimeStatus READ runtimeStatus NOTIFY runtimeStatusChanged)
     Q_PROPERTY(bool runtimeDetected READ runtimeDetected NOTIFY runtimeStatusChanged)
+    Q_PROPERTY(bool runtimeHasCore READ runtimeHasCore NOTIFY runtimeStatusChanged)
     Q_PROPERTY(QString runtimeManifestJson READ runtimeManifestJson NOTIFY runtimeStatusChanged)
+    Q_PROPERTY(QString runtimeSourceKind READ runtimeSourceKind NOTIFY runtimeStatusChanged)
+    Q_PROPERTY(QString runtimeAppVersion READ runtimeAppVersion NOTIFY runtimeStatusChanged)
+    Q_PROPERTY(QString runtimeAppDir READ runtimeAppDir NOTIFY runtimeStatusChanged)
+    Q_PROPERTY(QString runtimeEntryHtml READ runtimeEntryHtml NOTIFY runtimeStatusChanged)
+    Q_PROPERTY(int runtimeExposedApiCount READ runtimeExposedApiCount NOTIFY runtimeStatusChanged)
+    Q_PROPERTY(int runtimeSyncCallSites READ runtimeSyncCallSites NOTIFY runtimeStatusChanged)
+    Q_PROPERTY(int runtimeDynamicSyncCalls READ runtimeDynamicSyncCalls NOTIFY runtimeStatusChanged)
+    Q_PROPERTY(int runtimeNativeLibraryCount READ runtimeNativeLibraryCount NOTIFY runtimeStatusChanged)
+    Q_PROPERTY(QStringList runtimeWarnings READ runtimeWarnings NOTIFY runtimeStatusChanged)
+    Q_PROPERTY(QStringList runtimeExposedApis READ runtimeExposedApis NOTIFY runtimeStatusChanged)
+
     Q_PROPERTY(int conversationCount READ conversationCount NOTIFY countsChanged)
     Q_PROPERTY(int messageCount READ messageCount NOTIFY countsChanged)
     Q_PROPERTY(bool demoMode READ demoMode CONSTANT)
+    Q_PROPERTY(bool webMode READ webMode CONSTANT)
+    Q_PROPERTY(bool nativeMode READ nativeMode CONSTANT)
+    Q_PROPERTY(QString appMode READ appMode CONSTANT)
     Q_PROPERTY(bool rendererHostEnabled READ rendererHostEnabled CONSTANT)
     Q_PROPERTY(QString rendererUrl READ rendererUrl CONSTANT)
+    Q_PROPERTY(QString modeLabel READ modeLabel CONSTANT)
+    Q_PROPERTY(QString currentPageUrl READ currentPageUrl NOTIFY rendererPageChanged)
+    Q_PROPERTY(QString rendererPageTitle READ rendererPageTitle NOTIFY rendererPageChanged)
+    Q_PROPERTY(QString rendererState READ rendererState NOTIFY rendererPageChanged)
     Q_PROPERTY(QString diagnosticsText READ diagnosticsText NOTIFY diagnosticsChanged)
 
 public:
     struct Options
     {
         QString runtimeRoot;
-        bool demo = true;
+        QString rendererUrl;
+        bool demo = false;
+        // Explicit opt-in for the visible Zalo Web experiment. The default is
+        // the native runtime shell; the Web wrapper is never the target UI.
+        bool webMode = false;
     };
 
     explicit AppController(const Options &options, QObject *parent = nullptr);
@@ -62,20 +85,42 @@ public:
 
     QString runtimeStatus() const { return m_runtimeStatus; }
     bool runtimeDetected() const { return m_runtimeDetected; }
+    bool runtimeHasCore() const { return m_runtimeHasCore; }
     QString runtimeManifestJson() const;
+    QString runtimeSourceKind() const { return m_runtimeSourceKind; }
+    QString runtimeAppVersion() const { return m_runtimeAppVersion; }
+    QString runtimeAppDir() const { return m_runtimeAppDir; }
+    QString runtimeEntryHtml() const { return m_runtimeEntryHtml; }
+    int runtimeExposedApiCount() const { return m_runtimeExposedApis.size(); }
+    int runtimeSyncCallSites() const { return m_runtimeSyncCallSites; }
+    int runtimeDynamicSyncCalls() const { return m_runtimeDynamicSyncCalls; }
+    int runtimeNativeLibraryCount() const { return m_runtimeNativeLibraryCount; }
+    QStringList runtimeWarnings() const { return m_runtimeWarnings; }
+    QStringList runtimeExposedApis() const { return m_runtimeExposedApis; }
+
     bool demoMode() const { return m_options.demo; }
+    bool webMode() const { return m_options.webMode; }
+    bool nativeMode() const { return !m_options.demo && !m_options.webMode; }
+    QString appMode() const;
     bool rendererHostEnabled() const;
     QString rendererUrl() const;
+    QString modeLabel() const;
+    QString currentPageUrl() const { return m_currentPageUrl; }
+    QString rendererPageTitle() const { return m_rendererPageTitle; }
+    QString rendererState() const { return m_rendererState; }
     QString diagnosticsText() const { return m_log.join(QLatin1Char('\n')); }
 
     Q_INVOKABLE void openConversation(const QString &id);
     Q_INVOKABLE bool sendMessage(const QString &text);
     Q_INVOKABLE void setSearchText(const QString &text);
     Q_INVOKABLE void reloadDemo();
+    Q_INVOKABLE void refreshRuntime();
     Q_INVOKABLE void clearDiagnostics();
     Q_INVOKABLE void logRenderer(const QString &message);
     Q_INVOKABLE void onRendererLoaded();
     Q_INVOKABLE void onRendererFailed(const QString &error);
+    Q_INVOKABLE void onRendererPageChanged(const QString &url, const QString &title);
+    Q_INVOKABLE void onRendererLoadingChanged(bool loading);
 
     int conversationCount() const;
     int messageCount() const;
@@ -85,11 +130,15 @@ signals:
     void countsChanged();
     void runtimeStatusChanged();
     void diagnosticsChanged();
+    void rendererPageChanged();
 
 private:
     void detectRuntime();
+    void clearRuntime();
     void applyState(const QJsonObject &state);
     void appendLog(const QString &line);
+    void updateRendererState();
+    QString sanitizedUrl(const QString &url) const;
 
     Options m_options;
     BridgeRouter *m_router = nullptr;
@@ -107,8 +156,23 @@ private:
     bool m_currentOnline = false;
 
     bool m_runtimeDetected = false;
+    bool m_runtimeHasCore = false;
     QString m_runtimeStatus;
+    QString m_runtimeSourceKind;
+    QString m_runtimeAppVersion;
+    QString m_runtimeAppDir;
+    QString m_runtimeEntryHtml;
+    int m_runtimeSyncCallSites = 0;
+    int m_runtimeDynamicSyncCalls = 0;
+    int m_runtimeNativeLibraryCount = 0;
+    QStringList m_runtimeWarnings;
+    QStringList m_runtimeExposedApis;
     QJsonObject m_runtimeManifest;
+
+    QString m_currentPageUrl;
+    QString m_rendererPageTitle;
+    QString m_rendererState = QStringLiteral("idle");
+    bool m_rendererLoading = false;
 
     QStringList m_log;
 };

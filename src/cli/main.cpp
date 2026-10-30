@@ -1,5 +1,6 @@
 #include "AsarArchive.h"
 #include "BridgeRouter.h"
+#include "RuntimeImporter.h"
 #include "RuntimeLocator.h"
 
 #include <QCoreApplication>
@@ -39,6 +40,44 @@ int commandInspect(const QString &argument)
     QTextStream out(stdout);
     out << QString::fromUtf8(QJsonDocument(manifest->toJson()).toJson(QJsonDocument::Indented));
     return 0;
+}
+
+int commandImport(const QString &source,
+                  const QString &destination,
+                  const QString &expectedVersion,
+                  const QString &expectedSha256,
+                  bool overwrite)
+{
+    ZaloNative::RuntimeImportOptions options;
+    options.expectedVersion = expectedVersion;
+    options.expectedTreeSha256 = expectedSha256;
+    options.overwrite = overwrite;
+
+    QString error;
+    const auto result = ZaloNative::RuntimeImporter::importAppDirectory(source, destination,
+                                                                       options, &error);
+    if (!result)
+        return fail(error);
+
+    QTextStream out(stdout);
+    out << QString::fromUtf8(QJsonDocument(result->toJson()).toJson(QJsonDocument::Indented));
+    std::fprintf(stderr, "zalort: imported %s (%d files) into %s\n",
+                 qUtf8Printable(result->manifest.appVersion),
+                 result->fileCount,
+                 qUtf8Printable(result->destination));
+    return 0;
+}
+
+int commandVerify(const QString &runtimeDir)
+{
+    QString error;
+    const auto result = ZaloNative::RuntimeImporter::verify(runtimeDir, &error);
+    if (!result)
+        return fail(error);
+
+    QTextStream out(stdout);
+    out << QString::fromUtf8(QJsonDocument(*result).toJson(QJsonDocument::Indented));
+    return result->value(QStringLiteral("ok")).toBool() ? 0 : 2;
 }
 
 int commandList(const QString &argument, const QString &prefix)
@@ -116,12 +155,22 @@ int main(int argc, char *argv[])
 
     QCommandLineParser parser;
     parser.setApplicationDescription(
-        QStringLiteral("Inspect and extract Electron ASAR runtimes for Zalo Native."));
+        QStringLiteral("Inspect, import and verify Zalo desktop runtimes for Zalo Native."));
     parser.addHelpOption();
     parser.addVersionOption();
+    parser.addOption({QStringLiteral("expected-version"),
+                      QStringLiteral("Fail the import unless the runtime version matches."),
+                      QStringLiteral("version")});
+    parser.addOption({QStringLiteral("expected-sha256"),
+                      QStringLiteral("Fail the import unless the copied tree hash matches."),
+                      QStringLiteral("sha256")});
+    parser.addOption({QStringLiteral("overwrite"),
+                      QStringLiteral("Replace an existing directory only when it contains "
+                                     "runtime.json from a previous import.")});
     parser.addPositionalArgument(
         QStringLiteral("command"),
-        QStringLiteral("inspect <path> | list <path> [prefix] | extract <path> <entry> <output> | bridge-spec"));
+        QStringLiteral("inspect <path> | import <app-dir> <destination> | verify <runtime-dir> | "
+                       "list <path> [prefix] | extract <path> <entry> <output> | bridge-spec"));
 
     parser.process(app);
     const QStringList positional = parser.positionalArguments();
@@ -133,8 +182,22 @@ int main(int argc, char *argv[])
     const QString command = positional.at(0);
     if (command == QLatin1String("inspect")) {
         if (positional.size() != 2)
-            return fail(QStringLiteral("usage: zalort inspect <runtime-dir|app.asar>"));
+            return fail(QStringLiteral("usage: zalort inspect <runtime-dir|app-dir|app.asar>"));
         return commandInspect(positional.at(1));
+    }
+    if (command == QLatin1String("import")) {
+        if (positional.size() != 3)
+            return fail(QStringLiteral("usage: zalort import <app-dir> <destination> "
+                                       "[--expected-version v] [--expected-sha256 h] [--overwrite]"));
+        return commandImport(positional.at(1), positional.at(2),
+                             parser.value(QStringLiteral("expected-version")),
+                             parser.value(QStringLiteral("expected-sha256")),
+                             parser.isSet(QStringLiteral("overwrite")));
+    }
+    if (command == QLatin1String("verify")) {
+        if (positional.size() != 2)
+            return fail(QStringLiteral("usage: zalort verify <runtime-dir>"));
+        return commandVerify(positional.at(1));
     }
     if (command == QLatin1String("list")) {
         if (positional.size() < 2 || positional.size() > 3)

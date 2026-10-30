@@ -117,6 +117,30 @@ Item {
                 ctx.lineTo(12, 7.6);
                 ctx.stroke();
                 break;
+            case "reload":
+                ctx.beginPath();
+                ctx.arc(12, 12, 7.5, -Math.PI * 0.35, Math.PI * 1.45);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(18.6, 4.4);
+                ctx.lineTo(18.8, 10.2);
+                ctx.lineTo(13.2, 9.2);
+                ctx.stroke();
+                break;
+            case "back":
+                ctx.beginPath();
+                ctx.moveTo(15, 5);
+                ctx.lineTo(8, 12);
+                ctx.lineTo(15, 19);
+                ctx.stroke();
+                break;
+            case "forward":
+                ctx.beginPath();
+                ctx.moveTo(9, 5);
+                ctx.lineTo(16, 12);
+                ctx.lineTo(9, 19);
+                ctx.stroke();
+                break;
             default:
                 break;
             }

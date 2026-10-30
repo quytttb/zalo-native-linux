@@ -1,0 +1,9 @@
+{
+  "name": "Zalo",
+  "version": "9.9.9-fixture",
+  "main": "bootstrap.js",
+  "description": "Synthetic fixture for runtime detection tests; no Zalo code.",
+  "dependencies": {
+    "electron-log": "0.0.0-fixture"
+  }
+}

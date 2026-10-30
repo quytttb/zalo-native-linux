@@ -17,6 +17,35 @@ QString RuntimeLocator::defaultRoot()
     return QDir::homePath() + QStringLiteral("/.local/share/zalo-native/runtime");
 }
 
+bool RuntimeLocator::isAppDirectory(const QString &path)
+{
+    return RuntimeManifest::isAppDirectory(path);
+}
+
+QStringList RuntimeLocator::candidateAppDirs(const QString &root)
+{
+    const QFileInfo info(root);
+    if (!info.isDir())
+        return {};
+
+    const QString absolute = info.absoluteFilePath();
+    QStringList candidates;
+    if (isAppDirectory(absolute))
+        candidates.append(absolute);
+    candidates << absolute + QStringLiteral("/app")
+               << absolute + QStringLiteral("/AppDir/app")
+               << absolute + QStringLiteral("/runtime/app")
+               << absolute + QStringLiteral("/usr/share/zalo/app");
+
+    QStringList existing;
+    for (const QString &candidate : candidates) {
+        if (isAppDirectory(candidate))
+            existing.append(candidate);
+    }
+    existing.removeDuplicates();
+    return existing;
+}
+
 QStringList RuntimeLocator::candidateAsars(const QString &root)
 {
     const QFileInfo info(root);
@@ -43,15 +72,18 @@ QStringList RuntimeLocator::candidateAsars(const QString &root)
 
 std::optional<RuntimeManifest> RuntimeLocator::locate(const QString &root, QString *error)
 {
-    QStringList candidates = candidateAsars(root);
-    if (candidates.isEmpty()) {
-        if (error) {
-            *error = QStringLiteral("no app.asar found under %1").arg(root);
-        }
-        return std::nullopt;
+    const QStringList appDirs = candidateAppDirs(root);
+    QStringList errors;
+
+    for (const QString &appDir : appDirs) {
+        QString manifestError;
+        auto manifest = RuntimeManifest::fromAppDirectory(appDir, &manifestError);
+        if (manifest)
+            return manifest;
+        errors.append(manifestError);
     }
 
-    QStringList errors;
+    const QStringList candidates = candidateAsars(root);
     for (const QString &candidate : candidates) {
         QString archiveError;
         auto archive = AsarArchive::open(candidate, &archiveError);
@@ -75,8 +107,13 @@ std::optional<RuntimeManifest> RuntimeLocator::locate(const QString &root, QStri
         return manifest;
     }
 
-    if (error)
-        *error = errors.join(QStringLiteral("; "));
+    if (error) {
+        if (errors.isEmpty()) {
+            *error = QStringLiteral("no runtime app directory or app.asar found under %1").arg(root);
+        } else {
+            *error = errors.join(QStringLiteral("; "));
+        }
+    }
     return std::nullopt;
 }
 

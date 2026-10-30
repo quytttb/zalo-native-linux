@@ -1,4 +1,5 @@
 #include "LocalScheme.h"
+#include "RuntimePagePolicy.h"
 
 #include <QDir>
 #include <QFile>
@@ -31,6 +32,10 @@ private slots:
     void rejectsTraversalAndMissingFiles();
     void rejectsSymlinkEscapes();
     void reportsMimeTypes();
+    void rewritesOnlyLocalFetchDirectives();
+    void rewritesEveryCspMetaTag();
+    void leavesUnchangedWithoutCspOrValidScheme();
+    void rewritesSingleQuotedMetaIdempotently();
 };
 
 void LocalSchemeTest::mapsIndexAndAssets()
@@ -106,6 +111,74 @@ void LocalSchemeTest::reportsMimeTypes()
     QCOMPARE(mimeTypeForPath(QStringLiteral("data.json")), QStringLiteral("application/json"));
     QVERIFY(mimeTypeForPath(QStringLiteral("image.unknown-ext"))
                 .contains(QStringLiteral("octet-stream")));
+}
+
+void LocalSchemeTest::rewritesOnlyLocalFetchDirectives()
+{
+    const QByteArray html = R"(<html><head><meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests; default-src 'none'; script-src 'self' https://example.com; style-src 'self'; img-src * data:; connect-src 'self'; child-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; report-uri https://example.com/r"></head><body></body></html>)";
+
+    const auto result = ZaloNative::RuntimePagePolicy::allowSchemeInCsp(
+        html, QByteArrayLiteral("zalo-app"));
+    QVERIFY(result.changed);
+    QVERIFY(result.html.contains("default-src zalo-app:"));
+    QVERIFY(result.html.contains("script-src 'self' https://example.com zalo-app:"));
+    QVERIFY(result.html.contains("style-src 'self' zalo-app:"));
+    QVERIFY(result.html.contains("img-src * data: zalo-app:"));
+    QVERIFY(result.html.contains("connect-src 'self' zalo-app:"));
+    QVERIFY(result.html.contains("child-src 'self' zalo-app:"));
+    QVERIFY(result.html.contains("frame-ancestors 'none'"));
+    QVERIFY(result.html.contains("base-uri 'none'"));
+    QVERIFY(result.html.contains("form-action 'none'"));
+    QVERIFY(result.html.contains("report-uri https://example.com/r"));
+    QVERIFY(result.html.contains("upgrade-insecure-requests"));
+    QVERIFY(!result.html.contains("default-src 'none'"));
+}
+
+void LocalSchemeTest::rewritesEveryCspMetaTag()
+{
+    const QByteArray html = R"(<html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'"><meta http-equiv='Content-Security-Policy' content="img-src 'self'"></head></html>)";
+
+    const auto result = ZaloNative::RuntimePagePolicy::allowSchemeInCsp(
+        html, QByteArrayLiteral("zalo-app"));
+    QVERIFY(result.changed);
+    QVERIFY(result.html.contains("default-src zalo-app:"));
+    QVERIFY(result.html.contains("img-src 'self' zalo-app:"));
+    QVERIFY(!result.html.contains("default-src 'none'"));
+}
+
+void LocalSchemeTest::leavesUnchangedWithoutCspOrValidScheme()
+{
+    const QByteArray plain = "<html><body>no policy</body></html>";
+    const auto noPolicy = ZaloNative::RuntimePagePolicy::allowSchemeInCsp(
+        plain, QByteArrayLiteral("zalo-app"));
+    QVERIFY(!noPolicy.changed);
+    QCOMPARE(noPolicy.html, plain);
+
+    const QByteArray policy = R"(<meta http-equiv="Content-Security-Policy" content="script-src 'self'">)";
+    const auto invalid = ZaloNative::RuntimePagePolicy::allowSchemeInCsp(
+        policy, QByteArrayLiteral("bad scheme"));
+    QVERIFY(!invalid.changed);
+    QCOMPARE(invalid.html, policy);
+
+    const auto already = ZaloNative::RuntimePagePolicy::allowSchemeInCsp(
+        R"(<meta http-equiv="Content-Security-Policy" content="script-src zalo-app:">)",
+        QByteArrayLiteral("zalo-app"));
+    QVERIFY(!already.changed);
+}
+
+void LocalSchemeTest::rewritesSingleQuotedMetaIdempotently()
+{
+    const QByteArray html = R"(<meta http-equiv='Content-Security-Policy' content="default-src 'none'; script-src 'self'">)";
+    const auto first = ZaloNative::RuntimePagePolicy::allowSchemeInCsp(
+        html, QByteArrayLiteral("zalo-app"));
+    QVERIFY(first.changed);
+    QVERIFY(first.html.contains("default-src zalo-app:"));
+    QVERIFY(first.html.contains("script-src 'self' zalo-app:"));
+
+    const auto second = ZaloNative::RuntimePagePolicy::allowSchemeInCsp(
+        first.html, QByteArrayLiteral("zalo-app"));
+    QVERIFY(!second.changed);
+    QCOMPARE(second.html, first.html);
 }
 
 QTEST_GUILESS_MAIN(LocalSchemeTest)

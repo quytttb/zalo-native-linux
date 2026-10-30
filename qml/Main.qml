@@ -11,7 +11,8 @@ Window {
     height: 760
     minimumWidth: 900
     minimumHeight: 560
-    title: "Zalo Native — bản thử nghiệm"
+    title: App.demoMode ? "Zalo Native — Demo"
+                        : (App.webMode ? "Zalo Native — Web thử nghiệm" : "Zalo Native")
     color: Theme.background
 
     readonly property bool wide: width >= 980
@@ -19,16 +20,29 @@ Window {
 
     Shortcut {
         sequences: ["Ctrl+K", "Ctrl+F"]
+        enabled: App.demoMode
         onActivated: sidebar.focusSearch()
     }
 
     Shortcut {
+        sequence: "Ctrl+R"
+        enabled: !App.demoMode
+        onActivated: {
+            if (realShell.item && realShell.item.reload)
+                realShell.item.reload();
+            else if (App.nativeMode)
+                App.refreshRuntime();
+        }
+    }
+
+    Shortcut {
         sequences: ["Ctrl+N"]
+        enabled: App.demoMode
         onActivated: App.reloadDemo()
     }
 
     Shortcut {
-        sequences: ["Ctrl+D"]
+        sequence: "Ctrl+D"
         onActivated: diagnostics.open()
     }
 
@@ -40,44 +54,75 @@ Window {
     Item {
         anchors.fill: parent
 
-        RowLayout {
+        // ------------------------------------------------------------------
+        // Demo shell (explicit opt-in with --demo, used by the offline tests)
+        // ------------------------------------------------------------------
+        Item {
             anchors.fill: parent
-            spacing: 0
+            visible: App.demoMode
 
-            Sidebar {
-                id: sidebar
-                Layout.preferredWidth: window.wide ? 328 : 280
-                Layout.fillHeight: true
-                visible: window.wide || window.showSidebar
-                onDiagnosticsRequested: diagnostics.open()
+            RowLayout {
+                anchors.fill: parent
+                spacing: 0
+
+                Sidebar {
+                    id: sidebar
+                    Layout.preferredWidth: window.wide ? 328 : 280
+                    Layout.fillHeight: true
+                    visible: window.wide || window.showSidebar
+                    onDiagnosticsRequested: diagnostics.open()
+                }
+
+                ChatPane {
+                    id: chat
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                }
             }
 
-            ChatPane {
-                id: chat
-                Layout.fillWidth: true
-                Layout.fillHeight: true
+            Rectangle {
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                anchors.margins: 12
+                width: bannerLabel.implicitWidth + 22
+                height: 26
+                radius: 13
+                color: Theme.surfaceAlt
+                border.width: 1
+                border.color: Theme.border
+                opacity: 0.9
+
+                Text {
+                    id: bannerLabel
+                    anchors.centerIn: parent
+                    text: "Dữ liệu demo — chưa kết nối Zalo"
+                    color: Theme.textMuted
+                    font.pixelSize: 11
+                }
             }
         }
 
-        // Persistent banner so nobody mistakes an early build for a working client.
-        Rectangle {
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            anchors.margins: 12
-            width: bannerLabel.implicitWidth + 22
-            height: 26
-            radius: 13
-            color: Theme.surfaceAlt
-            border.width: 1
-            border.color: Theme.border
-            opacity: 0.9
+        // ------------------------------------------------------------------
+        // Native runtime host (default) and the explicit experimental Web mode
+        // ------------------------------------------------------------------
+        Loader {
+            id: realShell
+            anchors.fill: parent
+            visible: !App.demoMode
+            source: App.webMode
+                    ? (App.rendererHostEnabled ? "WebShell.qml" : "WebUnavailable.qml")
+                    : (App.rendererHostEnabled ? "RuntimeShell.qml" : "WebUnavailable.qml")
 
-            Text {
-                id: bannerLabel
-                anchors.centerIn: parent
-                text: App.demoMode ? "Dữ liệu demo — chưa kết nối Zalo" : "Runtime thử nghiệm"
-                color: Theme.textMuted
-                font.pixelSize: 11
+            onStatusChanged: {
+                if (status === Loader.Error)
+                    console.error("failed to load component: " + source);
+            }
+
+            onLoaded: {
+                if (item && item.diagnosticsRequested)
+                    item.diagnosticsRequested.connect(diagnostics.open);
+                if (item && item.view)
+                    item.view.forceActiveFocus();
             }
         }
     }
@@ -87,7 +132,7 @@ Window {
     }
 
     Component.onCompleted: {
-        if (wide)
+        if (App.demoMode && wide)
             chat.focusComposer();
     }
 }

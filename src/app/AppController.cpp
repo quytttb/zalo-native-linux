@@ -12,6 +12,7 @@
 #include <QJsonParseError>
 #include <QTime>
 #include <QTimer>
+#include <QUrl>
 #include <QUuid>
 
 namespace ZaloNative {
@@ -79,7 +80,92 @@ bool AppController::rendererHostEnabled() const
 
 QString AppController::rendererUrl() const
 {
-    return QStringLiteral("qrc:/qt/qml/ZaloNative/renderer/stub.html");
+    if (!m_options.rendererUrl.isEmpty())
+        return m_options.rendererUrl;
+    return QStringLiteral("https://chat.zalo.me/");
+}
+
+QString AppController::appMode() const
+{
+    if (m_options.demo)
+        return QStringLiteral("demo");
+    if (m_options.webMode)
+        return QStringLiteral("web");
+    return QStringLiteral("native");
+}
+
+QString AppController::modeLabel() const
+{
+    if (m_options.demo)
+        return QStringLiteral("Demo — dữ liệu giả lập");
+    if (m_options.webMode)
+        return QStringLiteral("Zalo Web thử nghiệm — không phải UI đích");
+    if (!rendererHostEnabled())
+        return QStringLiteral("Runtime native — bản build không có Qt WebEngine");
+    return QStringLiteral("Runtime native — Qt WebEngine host");
+}
+
+QString AppController::sanitizedUrl(const QString &url) const
+{
+    // Never put query strings or fragments into the log: Zalo uses them for
+    // session hand-off and they can contain credentials.
+    QUrl parsed(url);
+    if (!parsed.isValid())
+        return url.left(200);
+    parsed.setQuery(QString());
+    parsed.setFragment(QString());
+    return parsed.toString(QUrl::RemoveUserInfo);
+}
+
+void AppController::updateRendererState()
+{
+    const QUrl url(m_currentPageUrl);
+    const QString host = url.host().toLower();
+
+    if (m_rendererState == QStringLiteral("error"))
+        return;
+    if (m_rendererLoading)
+        m_rendererState = QStringLiteral("loading");
+    else if (host == QStringLiteral("id.zalo.me"))
+        m_rendererState = QStringLiteral("login");
+    else if (host == QStringLiteral("chat.zalo.me"))
+        m_rendererState = QStringLiteral("ready");
+    else if (host.isEmpty())
+        m_rendererState = QStringLiteral("idle");
+    else
+        m_rendererState = QStringLiteral("browsing");
+
+    emit rendererPageChanged();
+}
+
+void AppController::onRendererPageChanged(const QString &url, const QString &title)
+{
+    const QString safeUrl = sanitizedUrl(url);
+    const bool changed = (safeUrl != m_currentPageUrl) || (title != m_rendererPageTitle);
+    m_currentPageUrl = safeUrl;
+    m_rendererPageTitle = title.left(200);
+    if (!changed)
+        return;
+
+    if (!m_rendererLoading && m_rendererState != QStringLiteral("error")) {
+        m_rendererState = QStringLiteral("idle");
+        updateRendererState();
+    } else {
+        emit rendererPageChanged();
+    }
+    appendLog(QStringLiteral("web: %1").arg(safeUrl));
+}
+
+void AppController::onRendererLoadingChanged(bool loading)
+{
+    if (m_rendererLoading == loading)
+        return;
+    m_rendererLoading = loading;
+    if (loading)
+        m_rendererState = QStringLiteral("loading");
+    else
+        m_rendererState = QStringLiteral("idle");
+    updateRendererState();
 }
 
 int AppController::conversationCount() const
@@ -92,27 +178,93 @@ int AppController::messageCount() const
     return m_messages->rowCount();
 }
 
+void AppController::clearRuntime()
+{
+    m_runtimeDetected = false;
+    m_runtimeHasCore = false;
+    m_runtimeSourceKind.clear();
+    m_runtimeAppVersion.clear();
+    m_runtimeAppDir.clear();
+    m_runtimeEntryHtml.clear();
+    m_runtimeSyncCallSites = 0;
+    m_runtimeDynamicSyncCalls = 0;
+    m_runtimeNativeLibraryCount = 0;
+    m_runtimeWarnings.clear();
+    m_runtimeExposedApis.clear();
+    m_runtimeManifest = QJsonObject();
+}
+
 void AppController::detectRuntime()
 {
+    clearRuntime();
+
     const QString root = m_options.runtimeRoot.isEmpty() ? RuntimeLocator::defaultRoot()
                                                          : m_options.runtimeRoot;
     QString error;
     const auto manifest = RuntimeLocator::locate(root, &error);
 
-    if (manifest) {
-        m_runtimeDetected = true;
-        m_runtimeManifest = manifest->toJson();
-        m_runtimeStatus = QStringLiteral("Đã thấy runtime %1 %2 — tích hợp renderer ở mốc 2")
-                              .arg(manifest->name.isEmpty() ? QStringLiteral("Zalo") : manifest->name,
-                                   manifest->appVersion);
-        appendLog(QStringLiteral("runtime: found %1 (%2)").arg(manifest->asarPath, manifest->entryHtml));
-        for (const QString &warning : manifest->warnings)
-            appendLog(QStringLiteral("runtime: warning: %1").arg(warning));
-    } else {
-        m_runtimeDetected = false;
-        m_runtimeStatus = QStringLiteral("Chưa có runtime Zalo — đang chạy dữ liệu demo");
-        appendLog(QStringLiteral("runtime: not found under %1 (%2)").arg(root, error));
+    if (!manifest) {
+        m_runtimeStatus = QStringLiteral(
+            "Chưa có lõi Zalo PC trong %1.\n\n"
+            "Đây là chế độ runtime native: ứng dụng không mở Zalo Web và không dùng dữ liệu demo. "
+            "Hãy import một thư mục ứng dụng Zalo đã giải nén bằng:\n"
+            "  zalort import <app-dir> ~/.local/share/zalo-native/runtime\n"
+            "hoặc truyền --runtime <path>. Lõi Zalo vẫn chưa được tự động chạy.")
+                              .arg(root);
+        appendLog(QStringLiteral("runtime: not present under %1 (%2)").arg(root, error));
+        m_router->setRuntimeInfo(m_runtimeManifest);
+        emit runtimeStatusChanged();
+        return;
     }
+
+    m_runtimeDetected = true;
+    m_runtimeHasCore = manifest->isRuntimeCore();
+    m_runtimeManifest = manifest->toJson();
+    m_runtimeSourceKind = manifest->sourceKind;
+    m_runtimeAppVersion = manifest->appVersion;
+    m_runtimeAppDir = manifest->appDir.isEmpty() ? manifest->runtimeRoot : manifest->appDir;
+    m_runtimeEntryHtml = manifest->entryHtml;
+    m_runtimeSyncCallSites = manifest->preloads.syncCallSites;
+    m_runtimeDynamicSyncCalls = manifest->preloads.dynamicSyncCalls;
+    m_runtimeNativeLibraryCount = manifest->nativeLibraries.size();
+    m_runtimeWarnings = manifest->warnings;
+    m_runtimeExposedApis = manifest->preloads.exposedApis;
+
+    if (!m_runtimeHasCore) {
+        m_runtimeStatus = QStringLiteral(
+            "Đã đọc được ASAR launcher Zalo %1 nhưng không thấy entry HTML. "
+            "Đây không phải lõi ứng dụng và không thể host. Hãy trỏ --runtime vào thư mục "
+            "ứng dụng đã giải nén (ví dụ AppDir/app hoặc thư mục chứa pc-dist).")
+                              .arg(manifest->appVersion.isEmpty()
+                                       ? QStringLiteral("(version không rõ)")
+                                       : manifest->appVersion);
+    } else {
+        m_runtimeStatus = QStringLiteral(
+            "Đã nhận diện lõi Zalo PC %1 tại %2 (nguồn chưa xác minh, không phải bản Zalo Linux "
+            "chính thức). Entry: %3. Preload: %4 API, %5 lời gọi sync (%6 kênh động). "
+            "Qt host bootstrap chưa chạy; đây là màn hình chẩn đoán runtime, không phải chat.")
+                              .arg(manifest->appVersion.isEmpty()
+                                       ? QStringLiteral("(version không rõ)")
+                                       : manifest->appVersion,
+                                   m_runtimeAppDir,
+                                   manifest->entryHtml)
+                              .arg(manifest->preloads.exposedApis.size())
+                              .arg(manifest->preloads.syncCallSites)
+                              .arg(manifest->preloads.dynamicSyncCalls);
+    }
+
+    appendLog(QStringLiteral("runtime: %1 %2 (%3)")
+                  .arg(manifest->sourceKind,
+                       manifest->appVersion.isEmpty() ? QStringLiteral("?") : manifest->appVersion,
+                       m_runtimeAppDir));
+    if (!manifest->entryHtml.isEmpty())
+        appendLog(QStringLiteral("runtime: entry %1").arg(manifest->entryHtml));
+    appendLog(QStringLiteral("runtime: %1 preload API(s), %2 sync call site(s), %3 native lib(s)")
+                  .arg(manifest->preloads.exposedApis.size())
+                  .arg(manifest->preloads.syncCallSites)
+                  .arg(manifest->nativeLibraries.size()));
+    for (const QString &warning : manifest->warnings)
+        appendLog(QStringLiteral("runtime: warning: %1").arg(warning));
 
     m_router->setRuntimeInfo(m_runtimeManifest);
     emit runtimeStatusChanged();
@@ -232,6 +384,11 @@ void AppController::setSearchText(const QString &text)
     m_filter->setFilterText(text);
 }
 
+void AppController::refreshRuntime()
+{
+    detectRuntime();
+}
+
 void AppController::clearDiagnostics()
 {
     m_log.clear();
@@ -245,12 +402,19 @@ void AppController::logRenderer(const QString &message)
 
 void AppController::onRendererLoaded()
 {
-    appendLog(QStringLiteral("webengine: renderer page loaded"));
+    m_rendererLoading = false;
+    if (m_rendererState == QStringLiteral("error"))
+        m_rendererState = QStringLiteral("idle");
+    updateRendererState();
+    appendLog(QStringLiteral("webengine: page loaded"));
 }
 
 void AppController::onRendererFailed(const QString &error)
 {
+    m_rendererLoading = false;
+    m_rendererState = QStringLiteral("error");
     appendLog(QStringLiteral("✗ webengine: %1").arg(error.left(1000)));
+    emit rendererPageChanged();
 }
 
 void AppController::appendLog(const QString &line)

@@ -5,15 +5,67 @@
 #include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
+#include <QStandardPaths>
 #include <QTimer>
 #include <qqml.h>
+
+#include <cstdio>
 
 #ifdef ZALO_HAVE_WEBENGINE
 #include <QtWebEngineQuick/QtWebEngineQuick>
 #endif
 
+namespace {
+
+struct QmlWarningState
+{
+    int count = 0;
+    QtMessageHandler previous = nullptr;
+    bool strict = false;
+};
+
+QmlWarningState g_qmlWarnings;
+
+void messageHandler(QtMsgType type, const QMessageLogContext &context, const QString &message)
+{
+    if (g_qmlWarnings.strict
+        && (type == QtWarningMsg || type == QtCriticalMsg || type == QtFatalMsg)) {
+        const QString category = context.category ? QString::fromLatin1(context.category)
+                                                  : QString();
+        const bool looksLikeQml = category.startsWith(QLatin1String("qt.qml"))
+            || message.contains(QLatin1String("QML"))
+            || message.contains(QLatin1String("qrc:/qt/qml"))
+            || message.contains(QLatin1String("Cannot assign"))
+            || message.contains(QLatin1String("Unable to assign"))
+            || message.contains(QLatin1String("Cannot anchor"))
+            || message.contains(QLatin1String("is not a type"));
+        if (looksLikeQml) {
+            ++g_qmlWarnings.count;
+            std::fprintf(stderr, "qml-warning: %s\n", qUtf8Printable(message));
+        }
+    }
+
+    if (g_qmlWarnings.previous)
+        g_qmlWarnings.previous(type, context, message);
+}
+
+} // namespace
+
 int main(int argc, char *argv[])
 {
+    bool smokeTest = false;
+    bool selfTest = false;
+    for (int i = 1; i < argc; ++i) {
+        const QLatin1String arg(argv[i]);
+        if (arg == QLatin1String("--self-test")) {
+            selfTest = true;
+            QStandardPaths::setTestModeEnabled(true);
+        } else if (arg == QLatin1String("--smoke-test")) {
+            smokeTest = true;
+            QStandardPaths::setTestModeEnabled(true);
+        }
+    }
+
 #ifdef ZALO_HAVE_WEBENGINE
     // Must run before QGuiApplication is constructed.
     QtWebEngineQuick::initialize();
@@ -24,30 +76,53 @@ int main(int argc, char *argv[])
     QCoreApplication::setOrganizationDomain(QStringLiteral("github.com"));
     QCoreApplication::setApplicationName(QStringLiteral("ZaloNative"));
     QCoreApplication::setApplicationVersion(QStringLiteral(ZALO_VERSION));
+    QGuiApplication::setApplicationDisplayName(QStringLiteral("Zalo Native"));
     QGuiApplication::setDesktopFileName(QStringLiteral("io.github.quytttb.ZaloNative"));
 
     QCommandLineParser parser;
     parser.setApplicationDescription(
-        QStringLiteral("Experimental native Qt 6/QML shell for the Zalo desktop renderer."));
+        QStringLiteral("Unofficial Qt 6 host for a user-supplied Zalo desktop runtime, with a "
+                       "native Qt Quick interface. The visible Web wrapper is experimental."));
     parser.addHelpOption();
     parser.addVersionOption();
     parser.addOption({QStringLiteral("runtime"),
-                      QStringLiteral("Path to an extracted Zalo runtime or app.asar."),
+                      QStringLiteral("Path to an extracted Zalo application directory or app.asar."),
                       QStringLiteral("path")});
+    parser.addOption({QStringLiteral("demo"),
+                      QStringLiteral("Show the bundled demonstration conversations instead of "
+                                     "opening a runtime.")});
+    parser.addOption({QStringLiteral("web"),
+                      QStringLiteral("Open the experimental visible Zalo Web wrapper "
+                                     "(chat.zalo.me). This is not the target native UI.")});
+    parser.addOption({QStringLiteral("url"),
+                      QStringLiteral("URL for --web (defaults to https://chat.zalo.me/)."),
+                      QStringLiteral("url")});
     parser.addOption({QStringLiteral("no-demo"),
-                      QStringLiteral("Do not load the bundled demonstration conversations.")});
+                      QStringLiteral("Kept for compatibility; demo is opt-in via --demo.")});
     parser.addOption({QStringLiteral("self-test"),
                       QStringLiteral("Validate the core pipeline headlessly and exit.")});
     parser.addOption({QStringLiteral("smoke-test"),
-                      QStringLiteral("Load the QML interface, then quit after 1.5 seconds.")});
+                      QStringLiteral("Load the QML interface, then quit after 1.5 seconds. "
+                                     "QML warnings make the process fail.")});
     parser.process(app);
+
+    if (smokeTest) {
+        g_qmlWarnings.strict = true;
+        g_qmlWarnings.previous = qInstallMessageHandler(messageHandler);
+    }
 
     ZaloNative::AppController::Options options;
     options.runtimeRoot = parser.value(QStringLiteral("runtime"));
-    options.demo = !parser.isSet(QStringLiteral("no-demo"));
+    options.demo = parser.isSet(QStringLiteral("demo"));
+    options.webMode = parser.isSet(QStringLiteral("web"));
+    if (options.webMode)
+        options.rendererUrl = parser.value(QStringLiteral("url"));
+    else if (!parser.value(QStringLiteral("url")).isEmpty())
+        qWarning("--url is ignored without --web; the native runtime host does not open a URL.");
 
-    if (parser.isSet(QStringLiteral("self-test"))) {
+    if (selfTest) {
         options.demo = false;
+        options.webMode = false;
         ZaloNative::AppController controller(options);
         controller.reloadDemo();
         const bool ok = controller.conversationCount() > 0 && controller.messageCount() > 0;
@@ -57,6 +132,9 @@ int main(int argc, char *argv[])
                                  .arg(ok ? QStringLiteral("OK") : QStringLiteral("FAILED"));
         return ok ? 0 : 1;
     }
+
+    if (smokeTest && options.webMode && options.rendererUrl.isEmpty())
+        options.rendererUrl = QStringLiteral("about:blank");
 
     ZaloNative::AppController controller(options);
     qmlRegisterSingletonInstance("ZaloNative", 1, 0, "App", &controller);
@@ -70,8 +148,20 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    if (parser.isSet(QStringLiteral("smoke-test")))
-        QTimer::singleShot(1500, &app, &QCoreApplication::quit);
+    if (smokeTest) {
+        if (qEnvironmentVariableIsSet("ZALO_TEST_QML_WARNING"))
+            qWarning("QML synthetic warning used to verify the strict smoke-test handler");
+
+        QTimer::singleShot(1500, &app, [&app]() {
+            if (g_qmlWarnings.count > 0) {
+                std::fprintf(stderr, "smoke-test: %d QML warning(s) detected\n",
+                             g_qmlWarnings.count);
+                app.exit(2);
+                return;
+            }
+            app.quit();
+        });
+    }
 
     return app.exec();
 }
