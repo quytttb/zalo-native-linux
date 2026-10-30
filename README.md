@@ -42,7 +42,7 @@ ctest --test-dir build --output-on-failure
 Fast paths:
 
 ```bash
-./build/zalort inspect <runtime-dir-or-app.asar>
+./build/src/cli/zalort inspect <runtime-dir-or-app.asar>
 ./build/zalonative --self-test
 ./build/zalonative --smoke-test
 QT_QPA_PLATFORM=offscreen ./build/zalonative   # headless run
@@ -88,6 +88,12 @@ docs/          PLAN, ARCHITECTURE, BRIDGE, RUNTIME, STATUS, LEGAL
 
 See `docs/PLAN.md` for the milestone roadmap, `docs/STATUS.md` for what works
 today, and `docs/LEGAL.md` before doing anything with a real Zalo build.
+
+CI uses Qt 6.8.3 on Ubuntu 24.04; the development and tagged-release workflows
+build a Debian package against Ubuntu 26.04's distribution Qt. These packages
+are demo-only and do not include an official Zalo runtime. To package locally on
+Ubuntu 26.04, configure with `-DZALO_WEBENGINE=OFF`, build and run the tests,
+then run `cpack --config build/CPackConfig.cmake -G DEB -B build/packages`.
 
 ## Legal
 

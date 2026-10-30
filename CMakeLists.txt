@@ -10,10 +10,21 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
 
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type" FORCE)
+endif()
+
 include(GNUInstallDirs)
 include(CTest)
 
+option(ZALO_BUILD_TESTS "Build the test suite" ON)
+option(ZALO_ENABLE_SANITIZERS "Build with AddressSanitizer/UBSan (GCC/Clang only)" OFF)
 option(ZALO_WEBENGINE "Build the optional Qt WebEngine renderer host" ON)
+
+if(ZALO_ENABLE_SANITIZERS AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=address,undefined)
+endif()
 
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Network)
 
@@ -97,7 +108,9 @@ install(FILES qml/icons/app.svg
         DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps
         RENAME io.github.quytttb.ZaloNative.svg)
 
-if(BUILD_TESTING)
+if(BUILD_TESTING AND ZALO_BUILD_TESTS)
     find_package(Qt6 6.5 REQUIRED COMPONENTS Test)
     add_subdirectory(tests)
 endif()
+
+include(packaging/CPackConfig.cmake)

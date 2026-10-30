@@ -1,0 +1,33 @@
+name: Build and test Debian package
+description: Build with distribution Qt on Ubuntu 26.04
+runs:
+  using: composite
+  steps:
+    - name: Install dependencies
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake ninja-build dpkg-dev \
+          qt6-base-dev qt6-declarative-dev qt6-declarative-dev-tools \
+          qt6-qpa-plugins qml6-module-qtquick qml6-module-qtquick-window \
+          qml6-module-qtquick-controls qml6-module-qtquick-templates \
+          qml6-module-qtquick-layouts qml6-module-qtqml \
+          qml6-module-qtqml-models qml6-module-qtqml-workerscript
+    - name: Configure, build and test
+      shell: bash
+      run: |
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DZALO_WEBENGINE=OFF
+        cmake --build build --parallel 2
+        ctest --test-dir build --output-on-failure
+    - name: Package and smoke test
+      shell: bash
+      run: |
+        set -euo pipefail
+        cpack --config build/CPackConfig.cmake -G DEB -B build/packages
+        debs=(build/packages/*.deb)
+        test "${#debs[@]}" -eq 1 && test -f "${debs[0]}"
+        dpkg-deb --extract "${debs[0]}" build/package-check
+        QT_QPA_PLATFORM=offscreen build/package-check/usr/bin/zalonative --self-test
+        QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software build/package-check/usr/bin/zalonative --smoke-test
+        dpkg-deb -f "${debs[0]}" Package Version Depends
+        (cd build/packages && sha256sum ./*.deb > SHA256SUMS)

@@ -1,3 +1,4 @@
+import ZaloNative 1.0
 import QtQuick
 
 Item {
@@ -98,10 +99,10 @@ Item {
     }
 
     Row {
-        anchors.top: bubble.top
+        anchors.top: row.top
         anchors.topMargin: -14
-        anchors.right: root.outgoing ? bubble.right : undefined
-        anchors.left: root.outgoing ? undefined : bubble.left
+        anchors.right: root.outgoing ? row.right : undefined
+        anchors.left: root.outgoing ? undefined : row.left
         spacing: 5
 
         Text {

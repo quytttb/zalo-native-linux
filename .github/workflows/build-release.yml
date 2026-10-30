@@ -1,0 +1,67 @@
+name: Build Release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag (vMAJOR.MINOR.PATCH)
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  build-deb:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 90
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - name: Validate tag
+        id: meta
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          if [[ "$EVENT_NAME" == workflow_dispatch ]]; then tag="$INPUT_TAG"; fi
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Invalid release tag'; exit 1; }
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ steps.meta.outputs.tag }}
+      - name: Verify version
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          version=$(sed -nE 's/^ *VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' CMakeLists.txt | head -1)
+          test "$version" = "${TAG#v}"
+      - uses: ./.github/actions/package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-deb
+          path: |
+            build/packages/*.deb
+            build/packages/SHA256SUMS
+          if-no-files-found: error
+  release:
+    needs: build-deb
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-deb
+          path: release-assets
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.build-deb.outputs.tag }}
+          generate_release_notes: true
+          body: |
+            Experimental demo only; not connected to Zalo. Unofficial and not affiliated with VNG.
+            This package targets Ubuntu 26.04 amd64; verify SHA256SUMS before installation.
+          files: |
+            release-assets/*.deb
+            release-assets/SHA256SUMS

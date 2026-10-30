@@ -1,3 +1,4 @@
+import ZaloNative 1.0
 import QtQuick
 import QtQuick.Layouts
 

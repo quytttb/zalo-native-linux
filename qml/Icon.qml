@@ -1,3 +1,4 @@
+import ZaloNative 1.0
 import QtQuick
 
 // Small, theme-aware line icons drawn with Canvas so the shell does not depend

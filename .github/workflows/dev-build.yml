@@ -1,0 +1,32 @@
+name: Dev Build
+on:
+  push:
+    branches: [main]
+    paths: ['src/**', 'qml/**', 'renderer/**', 'tests/**', 'packaging/**', 'CMakeLists.txt', '.github/**']
+  workflow_dispatch:
+concurrency:
+  group: dev-build-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  build-deb:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zalo-native-dev-deb-${{ github.sha }}
+          path: |
+            build/packages/*.deb
+            build/packages/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dev-test-log-${{ github.sha }}
+          path: build/Testing/Temporary/LastTest.log
+          if-no-files-found: ignore

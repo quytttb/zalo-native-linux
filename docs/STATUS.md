@@ -22,13 +22,12 @@ Verified with `ctest` (10/10) on Qt 6.10.2 / g++-15: 5 QtTest suites
 - No Zalo login, no QR flow, no real account, no network calls to Zalo.
 - No send path to any server; composer messages stay in local memory.
 - No attachment upload/download, no calls, no notifications, no tray.
-- No packaging (Flatpak/deb) yet — only `make install` of binaries + desktop
-  file.
+- No Flatpak packaging yet. The development workflow produces a Debian package
+  for Ubuntu 26.04; tagged releases use the same tested packaging process.
 
 ## Known limitations
 
-- System Qt 6.10 packages lack `Qt6::WebEngineQuick` CMake targets unless the
-  `-dev` packages are installed; CI builds with `-DZALO_WEBENGINE=OFF`.
-  Local builds can point at an extracted dev prefix (see README).
+- WebEngine requires the corresponding Qt development packages. CI and Debian
+  packages currently build with `-DZALO_WEBENGINE=OFF`.
 - ASAR parser is read-only and validates structure, not signatures;
   `zalort verify` against vendor hashes is an M1 item.

@@ -34,4 +34,6 @@ if(TARGET zalonative)
     set_tests_properties(app_self_test app_smoke_test PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_LOGGING_RULES=qt.qml.binding.removal.info=false"
         TIMEOUT 30)
+    set_tests_properties(app_smoke_test PROPERTIES
+        FAIL_REGULAR_EXPRESSION "ReferenceError;TypeError;Unable to assign;Cannot anchor;failed to load component")
 endif()
