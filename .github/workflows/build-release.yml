@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag (vMAJOR.MINOR.PATCH)
+        description: New release tag (vMAJOR.MINOR.PATCH); project version will be updated
         required: true
         type: string
 permissions:
@@ -30,7 +30,20 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
         with:
-          ref: refs/tags/${{ steps.meta.outputs.tag }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || format('refs/tags/{0}', steps.meta.outputs.tag) }}
+      - name: Set version for manual release
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" != refs/heads/main ]]; then
+            echo '::error::Manual releases must run on main.'; exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null; then
+            echo "::error::Tag $TAG already exists; choose a new version."; exit 1
+          fi
+          sed -i -E "s/^( *VERSION )[0-9]+\.[0-9]+\.[0-9]+/\1${TAG#v}/" CMakeLists.txt
       - name: Verify version
         env:
           TAG: ${{ steps.meta.outputs.tag }}
@@ -51,6 +64,31 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout tested source
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Commit version and create tag
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          TAG: ${{ needs.build-deb.outputs.tag }}
+          TESTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TESTED_SHA" || { echo '::error::main changed during the build; run again.'; exit 1; }
+          sed -i -E "s/^( *VERSION )[0-9]+\.[0-9]+\.[0-9]+/\1${TAG#v}/" CMakeLists.txt
+          version=$(sed -nE 's/^ *VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' CMakeLists.txt | head -1)
+          test "$version" = "${TAG#v}"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if ! git diff --quiet -- CMakeLists.txt; then
+            git add CMakeLists.txt
+            git commit -m "chore(release): $TAG"
+          fi
+          git tag "$TAG"
+          git push --atomic origin HEAD:refs/heads/main "refs/tags/$TAG"
       - uses: actions/download-artifact@v4
         with:
           name: release-deb
