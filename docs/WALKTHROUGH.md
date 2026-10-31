@@ -212,6 +212,29 @@ Kết quả:
 
 ### Host API hẹp (`--host-api`)
 
+Ngoài AppImage cộng đồng, đã thử offline phần renderer/preload trích riêng từ
+DMG Zalo macOS 26.10.20 tải qua trang Zalo PC: trang load, IndexedDB mở, 19 lời
+gọi host và một rejection dependency injection. Probe dùng stub/CSP rewrite;
+đây chưa phải runtime import đầy đủ hay login. Xem nguồn, hash và giới hạn xác
+minh trong [RUNTIME-EVIDENCE.md](RUNTIME-EVIDENCE.md).
+Debugger offline quan sát được `getResourceUsage` chưa hỗ trợ khi module ảnh
+khởi tạo và rejection DI do token `system-time` chưa đăng ký; chưa xác định hai
+lỗi có quan hệ nhân quả.
+Import toàn bộ DMG đang bị chặn: 52/101 file unpacked khác size và hash khai
+trong ASAR. Cả 52 đều là Mach-O có load command chữ ký; điều này gợi ý nhưng
+không chứng minh thay đổi do ký. Chưa xác minh chữ ký hoặc tắt kiểm tra để ép
+import thành công.
+Với một binary arm64, CMS và 18 hash code-page khớp; chuỗi OpenSSL chỉ xác minh
+được khi bỏ qua critical extension của Apple. Đây không phải kiểm tra chữ ký
+macOS đầy đủ, không chứng minh cả bundle hay nguyên nhân mismatch.
+
+```bash
+./build-web/src/cli/zalort check-unpacked '/path/to/Zalo.app/Contents/Resources/app.asar'
+```
+
+Lệnh trả `ok: false` và exit 2 khi có khác biệt hoặc không kiểm tra được; nó
+không kiểm tra packed entries, chữ ký macOS hay xác thực vendor.
+
 ```bash
 ./build-web/zalo-bootstrap-probe \
   --runtime "$HOME/.local/share/zalo-native/runtime" \
@@ -224,14 +247,38 @@ Kết quả:
 
 - `hostApisInjected: true`, `hostApiMode: bounded-diagnostic`;
 - trang vẫn load, tiêu đề đăng nhập Zalo, `blockedRemoteCount: 0`;
-- `hostRequestCount: 18`, operation gồm `electron.appVersion`, `electron.path`,
-  `store.get`, `store.set`, `fs.mkdir`, `fs.access`, `fs.exists`;
+- `hostRequestCount: 22`, operation gồm `electron.appVersion`, `electron.path`,
+  `store.get`, `store.set`, `os.release`, `fs.mkdir`, `fs.access`, `fs.exists`;
 - còn một rejection dependency injection; subset chưa đủ cho preload bridge hoàn chỉnh.
 
 Test WebEngine `test_host_preload` chứng minh thêm `$znode.path`, file
 UTF-8/base64, có `fsPromise`, `$zelectron` path/version/store, chặn path ngoài
 root, `ERR_HOST_PATH_UNSUPPORTED` và `ENOENT`. Đây là policy layer, không phải
 Electron/IPC production hay OS sandbox.
+
+Kiểm thử bổ sung cho host policy:
+
+```bash
+ctest --test-dir build-web -R '^test_host_(api|preload)$' --output-on-failure
+ctest --test-dir build -R '^test_host_api$' --output-on-failure
+```
+
+Cả hai lệnh đã pass. `test_host_api` kiểm tra symlink có đích chưa tồn tại:
+ghi, ghi nối và thao tác trên đường dẫn con bị từ chối, không tạo file ngoài
+root. `test_host_preload` kiểm tra tên store và khóa `__proto__`, kể cả snapshot
+và listener. Một backend riêng ghi vào store được test quan sát qua polling;
+điều này không chứng minh an toàn trước race symlink hay đồng bộ event đầy đủ.
+`test_host_api` cũng kiểm tra append và copy khi file vượt giới hạn 8 MiB;
+copy bị từ chối mà không thay đổi file đích. Các giới hạn là policy trong quy
+trình, không bảo đảm trước thay đổi file đồng thời từ tiến trình local khác.
+Test preload cũng kiểm tra byte không encoding: `toString()` cho UTF-8, base64,
+hex, BOM và byte UTF-8 lỗi. Đối tượng vẫn là `Uint8Array`, không phải Node
+Buffer đầy đủ; slice decoding và các encoding khác báo unsupported.
+Runtime tham khảo gọi `getElectronStore` với object options và `watch: true`.
+Preload tách store theo `name` và polling snapshot mỗi 2 giây khi có listener,
+tối đa 16 store đang watch. Có thể bỏ lỡ thay đổi giữa hai lần đọc; defaults và
+reset vẫn báo unsupported. Test cũng kiểm tra `util.promisify` error-first và
+`os.release` thật, không giả lập toàn bộ Node API.
 
 Bảng quyết định API nào cần host thật, API nào trả lỗi unsupported nằm trong
 [BRIDGE.md](BRIDGE.md). Không dùng proxy catch-all trong production.

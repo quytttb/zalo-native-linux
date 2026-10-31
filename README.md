@@ -24,17 +24,18 @@ intended product just a visible wrapper around `chat.zalo.me`.
   local scripts; a scoped in-memory rewrite now lets scripts run, leaving missing
   preload APIs (`$zlogger.loadShellQos`, `$zwindow`) as the next blocker. The
   opt-in `--stub-preload` mode is diagnostic only. The opt-in `--host-api` mode
-  injects a bounded preload and served 18 host calls in an isolated data root; a dependency-injection
-  failure remains. Neither mode is a production
-  bridge.
+  injects a bounded preload and served 22 host calls in an isolated data root;
+  a dependency-injection failure remains. Neither mode is a production bridge.
 - Official runtime bootstrap, preload compatibility, QR login through that
   runtime, and real chat in the QML interface are **not implemented/verified**.
 - A separate direct-protocol C++ QR probe successfully confirmed a Web session.
   That experiment is **discontinued**, not the product backend. Its code remains
   for historical reference but is excluded from the default build.
 
-The only runtime examined here came from a **community AppImage**, not an
-official Zalo Linux release. See [runtime evidence](docs/RUNTIME-EVIDENCE.md).
+The project has examined a **community AppImage** and a partial renderer
+extraction from a macOS DMG downloaded through Zalo's site. Neither is a working
+Linux host; full archive/signature verification remains incomplete. See
+[runtime evidence](docs/RUNTIME-EVIDENCE.md).
 
 Start with [the roadmap](docs/PLAN.md), [the checklist](docs/TODO.md),
 [current status](docs/STATUS.md) and [the walkthrough](docs/WALKTHROUGH.md).

@@ -51,9 +51,14 @@ public:
     bool isDirectory(const QString &path) const;
 
     // Reads a regular file. Refuses directories, unsafe paths, links that leave
-    // the archive and payloads larger than maxBytes.
+    // the archive and payloads larger than maxBytes. Unpacked files must stay
+    // within the unpacked root; local symlink races are not an OS sandbox.
     bool readFile(const QString &path, QByteArray *out, QString *error = nullptr,
                   qint64 maxBytes = 512LL * 1024 * 1024) const;
+
+    // Counts checks against the ASAR's own unpacked metadata. This is not
+    // vendor authenticity verification. Never returns file contents or paths.
+    QJsonObject verifyUnpacked(qint64 maxBytes = 512LL * 1024 * 1024) const;
 
 private:
     struct Node
@@ -64,6 +69,8 @@ private:
         qint64 offset = 0;
         qint64 size = 0;
         QString link;
+        QString integrityAlgorithm;
+        QString integrityHash;
     };
 
     static QString normalizeKey(const QString &raw);

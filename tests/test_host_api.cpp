@@ -7,6 +7,11 @@
 #include <QJsonObject>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QSysInfo>
+
+#ifdef Q_OS_UNIX
+#include <unistd.h>
+#endif
 
 using namespace ZaloNative;
 
@@ -37,6 +42,7 @@ private slots:
     void fileRoundTrip();
     void traversalAndAbsolutePathsAreRejected();
     void symlinkEscapeIsRejected();
+    void danglingSymlinkEscapeIsRejected();
     void storeRoundTrip();
     void operationsAreRecordedWithoutArguments();
     void unknownOperationFailsExplicitly();
@@ -61,6 +67,12 @@ void HostApiTest::electronPathsStayUnderDataRoot()
     QCOMPARE(appPath.value(QStringLiteral("value")).toString(), api.appRoot());
     const QJsonObject appVersion = call(api, QStringLiteral("electron.appVersion"));
     QCOMPARE(appVersion.value(QStringLiteral("value")).toString(), QStringLiteral("26.10.20"));
+
+    const QJsonObject release = call(api, QStringLiteral("os.release"));
+    if (QSysInfo::kernelVersion().isEmpty())
+        QCOMPARE(errorCode(release), QStringLiteral("ERR_HOST_UNSUPPORTED"));
+    else
+        QCOMPARE(release.value(QStringLiteral("value")).toString(), QSysInfo::kernelVersion());
 
     const QJsonObject documents
         = call(api, QStringLiteral("electron.path"),
@@ -144,6 +156,38 @@ void HostApiTest::traversalAndAbsolutePathsAreRejected()
     QVERIFY(!absolute.value(QStringLiteral("ok")).toBool());
     QCOMPARE(errorCode(absolute), QStringLiteral("ERR_HOST_OUTSIDE_ROOT"));
     QVERIFY(!QFileInfo::exists(QStringLiteral("/tmp/zalonative-escape.txt")));
+}
+
+void HostApiTest::danglingSymlinkEscapeIsRejected()
+{
+#ifndef Q_OS_UNIX
+    QSKIP("requires POSIX symbolic links");
+#else
+    QTemporaryDir temp;
+    QTemporaryDir outside;
+    QVERIFY(temp.isValid());
+    QVERIFY(outside.isValid());
+    HostApi api(temp.path(), temp.path(), QStringLiteral("test"));
+    const QString target = outside.filePath(QStringLiteral("new-file"));
+    const QString link = temp.filePath(QStringLiteral("dangling"));
+    QCOMPARE(::symlink(QFile::encodeName(target).constData(),
+                       QFile::encodeName(link).constData()), 0);
+    QVERIFY(QFileInfo(link).isSymLink());
+    QVERIFY(!QFileInfo::exists(target));
+
+    for (const QString &operation : {QStringLiteral("fs.appendFile"),
+                                     QStringLiteral("fs.writeFile")}) {
+        const QJsonObject result = call(api, operation,
+            QJsonObject{{QStringLiteral("path"), QStringLiteral("dangling")},
+                        {QStringLiteral("data"), QStringLiteral("x")}});
+        QCOMPARE(errorCode(result), QStringLiteral("ERR_HOST_OUTSIDE_ROOT"));
+        QVERIFY(!QFileInfo::exists(target));
+    }
+    const QJsonObject nested = call(api, QStringLiteral("fs.mkdir"),
+        QJsonObject{{QStringLiteral("path"), QStringLiteral("dangling/child")}});
+    QCOMPARE(errorCode(nested), QStringLiteral("ERR_HOST_OUTSIDE_ROOT"));
+    QVERIFY(!QFileInfo::exists(target));
+#endif
 }
 
 void HostApiTest::symlinkEscapeIsRejected()
@@ -314,6 +358,33 @@ void HostApiTest::missingFilesAndLimitsFailExplicitly()
                            {QStringLiteral("encoding"), QStringLiteral("base64")}});
     QVERIFY(!tooBig.value(QStringLiteral("ok")).toBool());
     QCOMPARE(errorCode(tooBig), QStringLiteral("EFBIG"));
+
+    const QJsonObject append = call(api, QStringLiteral("fs.appendFile"),
+        QJsonObject{{QStringLiteral("path"), QStringLiteral("big.bin")},
+                    {QStringLiteral("data"), QStringLiteral("x")}});
+    QCOMPARE(errorCode(append), QStringLiteral("EFBIG"));
+    QCOMPARE(QFileInfo(big).size(), HostApi::kMaxFileBytes + 1);
+
+    QFile destination(api.dataRoot() + QStringLiteral("/destination.bin"));
+    QVERIFY(destination.open(QIODevice::WriteOnly));
+    QCOMPARE(destination.write("original"), 8);
+    destination.close();
+    const QJsonObject copy = call(api, QStringLiteral("fs.copyFile"),
+        QJsonObject{{QStringLiteral("from"), QStringLiteral("big.bin")},
+                    {QStringLiteral("to"), QStringLiteral("destination.bin")}});
+    QCOMPARE(errorCode(copy), QStringLiteral("EFBIG"));
+    QVERIFY(destination.open(QIODevice::ReadOnly));
+    QCOMPARE(destination.readAll(), QByteArrayLiteral("original"));
+    destination.close();
+
+    QVERIFY(big.open(QIODevice::ReadWrite));
+    QVERIFY(big.resize(HostApi::kMaxFileBytes));
+    big.close();
+    const QJsonObject boundary = call(api, QStringLiteral("fs.appendFile"),
+        QJsonObject{{QStringLiteral("path"), QStringLiteral("big.bin")},
+                    {QStringLiteral("data"), QStringLiteral("x")}});
+    QCOMPARE(errorCode(boundary), QStringLiteral("EFBIG"));
+    QCOMPARE(QFileInfo(big).size(), HostApi::kMaxFileBytes);
 }
 
 QTEST_GUILESS_MAIN(HostApiTest)

@@ -1,5 +1,6 @@
 #include "AsarArchive.h"
 
+#include <QCryptographicHash>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
@@ -29,6 +30,20 @@ QString parentKey(const QString &key)
 {
     const qsizetype slash = key.lastIndexOf(QLatin1Char('/'));
     return slash < 0 ? QString() : key.left(slash);
+}
+
+QString safeUnpackedFile(const QString &root, const QString &key)
+{
+    const QFileInfo rootInfo(root);
+    if (rootInfo.isSymLink() || !rootInfo.isDir())
+        return {};
+    const QString canonicalRoot = rootInfo.canonicalFilePath();
+    const QFileInfo fileInfo(root + QLatin1Char('/') + key);
+    const QString canonicalFile = fileInfo.canonicalFilePath();
+    if (canonicalRoot.isEmpty() || canonicalFile.isEmpty() || !fileInfo.isFile()
+        || !canonicalFile.startsWith(canonicalRoot + QLatin1Char('/')))
+        return {};
+    return canonicalFile;
 }
 
 } // namespace
@@ -183,15 +198,17 @@ std::optional<AsarArchive> AsarArchive::open(const QString &path, QString *error
                 node.offset = value.value(QStringLiteral("offset")).toString().toLongLong();
                 node.unpacked = value.value(QStringLiteral("unpacked")).toBool();
                 node.executable = value.value(QStringLiteral("executable")).toBool();
+                const QJsonObject integrity = value.value(QStringLiteral("integrity")).toObject();
+                node.integrityAlgorithm = integrity.value(QStringLiteral("algorithm")).toString();
+                node.integrityHash = integrity.value(QStringLiteral("hash")).toString();
 
                 if (node.size < 0 || node.offset < 0) {
                     fail(error, QStringLiteral("invalid size/offset for %1").arg(key));
                     return std::nullopt;
                 }
                 if (node.unpacked) {
-                    const QFileInfo unpacked(archive.unpackedRoot() + QLatin1Char('/') + key);
-                    if (!unpacked.isFile()) {
-                        fail(error, QStringLiteral("missing unpacked file %1").arg(key));
+                    if (safeUnpackedFile(archive.unpackedRoot(), key).isEmpty()) {
+                        fail(error, QStringLiteral("missing or unsafe unpacked file %1").arg(key));
                         return std::nullopt;
                     }
                 } else {
@@ -289,10 +306,17 @@ bool AsarArchive::readFile(const QString &path, QByteArray *out, QString *error,
         return fail(error, QStringLiteral("%1 is larger than the allowed read size").arg(path));
 
     if (node.unpacked) {
-        QFile file(unpackedRoot() + QLatin1Char('/') + resolved->key);
+        const QString path = safeUnpackedFile(unpackedRoot(), resolved->key);
+        if (path.isEmpty())
+            return fail(error, QStringLiteral("missing or unsafe unpacked file"));
+        QFile file(path);
         if (!file.open(QIODevice::ReadOnly))
             return fail(error, QStringLiteral("cannot open unpacked file: %1").arg(file.errorString()));
-        *out = file.readAll();
+        if (file.size() != node.size)
+            return fail(error, QStringLiteral("unpacked file size mismatch for %1").arg(resolved->key));
+        const qint64 readLimit = node.size == std::numeric_limits<qint64>::max()
+            ? node.size : node.size + 1;
+        *out = file.read(readLimit);
         return out->size() == node.size
             || fail(error, QStringLiteral("unpacked file size mismatch for %1").arg(path));
     }
@@ -307,6 +331,86 @@ bool AsarArchive::readFile(const QString &path, QByteArray *out, QString *error,
     if (out->size() != node.size)
         return fail(error, QStringLiteral("truncated payload for %1").arg(path));
     return true;
+}
+
+QJsonObject AsarArchive::verifyUnpacked(qint64 maxBytes) const
+{
+    int total = 0;
+    int verified = 0;
+    int sizeMismatch = 0;
+    int hashMismatch = 0;
+    int missingIntegrity = 0;
+    int unreadable = 0;
+    int tooLarge = 0;
+
+    for (auto it = m_nodes.cbegin(); it != m_nodes.cend(); ++it) {
+        const Node &node = it.value();
+        if (!node.unpacked || node.directory || !node.link.isEmpty())
+            continue;
+        ++total;
+        const QString path = safeUnpackedFile(unpackedRoot(), it.key());
+        QFile file(path);
+        if (path.isEmpty() || !file.open(QIODevice::ReadOnly)) {
+            ++unreadable;
+            continue;
+        }
+        if (maxBytes < 0 || file.size() > maxBytes) {
+            ++tooLarge;
+            continue;
+        }
+
+        const QByteArray expected = node.integrityHash.toLatin1().toLower();
+        const bool hasHash = node.integrityAlgorithm.compare(QLatin1String("SHA256"),
+                                                               Qt::CaseInsensitive) == 0
+            && expected.size() == 64
+            && std::all_of(expected.cbegin(), expected.cend(), [](char c) {
+                return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+            });
+        if (!hasHash)
+            ++missingIntegrity;
+
+        QCryptographicHash hash(QCryptographicHash::Sha256);
+        qint64 bytesRead = 0;
+        bool exceeded = false;
+        while (!file.atEnd()) {
+            const qint64 remaining = maxBytes - bytesRead;
+            const qint64 chunkSize = remaining < 65536 ? remaining + 1 : 65536;
+            const QByteArray chunk = file.read(chunkSize);
+            if (chunk.isEmpty())
+                break;
+            if (chunk.size() > remaining) {
+                exceeded = true;
+                break;
+            }
+            bytesRead += chunk.size();
+            hash.addData(chunk);
+        }
+        if (exceeded) {
+            ++tooLarge;
+            continue;
+        }
+        if (file.error() != QFileDevice::NoError || bytesRead != file.size()) {
+            ++unreadable;
+            continue;
+        }
+        const bool sizeMatches = bytesRead == node.size;
+        const bool hashMatches = hasHash && hash.result().toHex() == expected;
+        if (!sizeMatches)
+            ++sizeMismatch;
+        if (hasHash && !hashMatches)
+            ++hashMismatch;
+        if (sizeMatches && hashMatches)
+            ++verified;
+    }
+
+    return {{QStringLiteral("ok"), m_open && total == verified},
+            {QStringLiteral("total"), total},
+            {QStringLiteral("verified"), verified},
+            {QStringLiteral("sizeMismatch"), sizeMismatch},
+            {QStringLiteral("hashMismatch"), hashMismatch},
+            {QStringLiteral("missingIntegrity"), missingIntegrity},
+            {QStringLiteral("unreadable"), unreadable},
+            {QStringLiteral("tooLarge"), tooLarge}};
 }
 
 } // namespace ZaloNative

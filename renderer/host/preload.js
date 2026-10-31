@@ -390,9 +390,36 @@
             var bytes = new Uint8Array(binary.length);
             for (var i = 0; i < binary.length; ++i)
                 bytes[i] = binary.charCodeAt(i);
+            // A limited byte result, not a Buffer polyfill. Preserve the
+            // Uint8Array interface while supporting common whole-file decoding.
+            Object.defineProperty(bytes, "toString", {
+                value: function (encoding, start, end) {
+                    if (start !== undefined || end !== undefined)
+                        throw hostError("ERR_HOST_UNSUPPORTED", "byte slice decoding is not implemented");
+                    var name = encoding === undefined ? "utf8" : String(encoding).toLowerCase();
+                    if (name === "utf8" || name === "utf-8") {
+                        if (typeof global.TextDecoder !== "function")
+                            throw hostError("ERR_HOST_UNSUPPORTED", "UTF-8 decoder is unavailable");
+                        return new global.TextDecoder("utf-8", { ignoreBOM: true }).decode(this);
+                    }
+                    if (name === "base64") {
+                        var raw = "";
+                        for (var j = 0; j < this.length; ++j)
+                            raw += String.fromCharCode(this[j]);
+                        return global.btoa(raw);
+                    }
+                    if (name === "hex") {
+                        var hex = "";
+                        for (var k = 0; k < this.length; ++k)
+                            hex += this[k].toString(16).padStart(2, "0");
+                        return hex;
+                    }
+                    throw hostError("ERR_HOST_UNSUPPORTED", "byte encoding is not implemented");
+                }
+            });
             return bytes;
         }
-        return value;
+        throw hostError("ERR_HOST_UNSUPPORTED", "base64 decoder is unavailable");
     }
 
     // ---------------------------------------------------------------------
@@ -788,7 +815,11 @@
         return callHost("electron.path", { name: name });
     }
 
-    var stores = {};
+    // Store names and keys are data, including JavaScript prototype names.
+    var stores = Object.create(null);
+    var activeStoreWatches = 0;
+    var maxStoreWatches = 16;
+    var storeWatchIntervalMs = 2000;
 
     function cloneStoreValue(value) {
         return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -798,20 +829,71 @@
         this.name = typeof name === "string" && name.length > 0 ? name : "default";
         this.listeners = [];
         this.anyListeners = [];
+        this.watchEnabled = false;
+        this.watchTimer = null;
+        this.watchSnapshot = null;
+        this.watchErrorReported = false;
     }
 
     ElectronStore.prototype.snapshot = function () {
-        var result = {};
+        return callHost("store.snapshot", { name: this.name });
+    };
+
+    ElectronStore.prototype.startWatch = function () {
+        if (!this.watchEnabled || this.watchTimer !== null
+            || this.listeners.length + this.anyListeners.length === 0)
+            return;
+        if (activeStoreWatches >= maxStoreWatches)
+            throw hostError("ERR_HOST_WATCH_LIMIT", "too many watched stores");
+        this.watchSnapshot = this.snapshot();
         var self = this;
-        var keys = callHost("store.keys", { name: self.name });
-        if (Array.isArray(keys)) {
-            keys.forEach(function (key) {
-                var entry = callHost("store.get", { name: self.name, key: key });
-                if (entry && entry.found)
-                    result[key] = entry.value;
-            });
-        }
-        return result;
+        this.watchTimer = global.setInterval(function () {
+            try {
+                self.pollWatch();
+                self.watchErrorReported = false;
+            } catch (error) {
+                if (!self.watchErrorReported) {
+                    console.error("ElectronStore watch failed");
+                    self.watchErrorReported = true;
+                }
+            }
+        }, storeWatchIntervalMs);
+        ++activeStoreWatches;
+    };
+
+    ElectronStore.prototype.stopWatchIfUnused = function () {
+        if (this.watchTimer === null || this.listeners.length + this.anyListeners.length > 0)
+            return;
+        global.clearInterval(this.watchTimer);
+        this.watchTimer = null;
+        this.watchSnapshot = null;
+        this.watchErrorReported = false;
+        --activeStoreWatches;
+    };
+
+    ElectronStore.prototype.pollWatch = function () {
+        if (this.watchTimer === null)
+            return;
+        var previous = this.watchSnapshot;
+        var current = this.snapshot();
+        this.watchSnapshot = current;
+        if (JSON.stringify(previous) === JSON.stringify(current))
+            return;
+        var keys = Object.create(null);
+        Object.keys(previous).concat(Object.keys(current)).forEach(function (key) { keys[key] = true; });
+        var self = this;
+        Object.keys(keys).forEach(function (key) {
+            var before = Object.prototype.hasOwnProperty.call(previous, key) ? previous[key] : undefined;
+            var after = Object.prototype.hasOwnProperty.call(current, key) ? current[key] : undefined;
+            if (JSON.stringify(before) !== JSON.stringify(after))
+                self.notifyKey(key, after, before);
+        });
+        this.notifyAny(current, previous);
+    };
+
+    ElectronStore.prototype.refreshWatchAfterWrite = function () {
+        if (this.watchTimer !== null)
+            this.watchSnapshot = this.snapshot();
     };
 
     ElectronStore.prototype.notifyKey = function (key, newValue, oldValue) {
@@ -842,6 +924,7 @@
     };
 
     ElectronStore.prototype.set = function (key, value) {
+        this.pollWatch();
         var name = String(key);
         var trackAny = this.anyListeners.length > 0;
         var oldValue;
@@ -851,9 +934,17 @@
         if (trackAny)
             oldStore = this.snapshot();
         callHost("store.set", { name: this.name, key: name, value: value });
-        this.notifyKey(name, value, oldValue);
-        if (trackAny)
-            this.notifyAny(this.snapshot(), oldStore);
+        this.refreshWatchAfterWrite();
+        if (this.listeners.length > 0) {
+            var newValue = this.get(name);
+            if (JSON.stringify(newValue) !== JSON.stringify(oldValue))
+                this.notifyKey(name, newValue, oldValue);
+        }
+        if (trackAny) {
+            var newStore = this.snapshot();
+            if (JSON.stringify(newStore) !== JSON.stringify(oldStore))
+                this.notifyAny(newStore, oldStore);
+        }
     };
 
     ElectronStore.prototype.has = function (key) {
@@ -861,6 +952,7 @@
     };
 
     ElectronStore.prototype.delete = function (key) {
+        this.pollWatch();
         var name = String(key);
         var trackAny = this.anyListeners.length > 0;
         var oldValue;
@@ -870,20 +962,28 @@
         if (trackAny)
             oldStore = this.snapshot();
         callHost("store.delete", { name: this.name, key: name });
-        this.notifyKey(name, undefined, oldValue);
-        if (trackAny)
-            this.notifyAny(this.snapshot(), oldStore);
+        this.refreshWatchAfterWrite();
+        if (oldValue !== undefined)
+            this.notifyKey(name, undefined, oldValue);
+        if (trackAny) {
+            var newStore = this.snapshot();
+            if (JSON.stringify(newStore) !== JSON.stringify(oldStore))
+                this.notifyAny(newStore, oldStore);
+        }
     };
 
     ElectronStore.prototype.clear = function () {
+        this.pollWatch();
         var track = this.listeners.length > 0 || this.anyListeners.length > 0;
         var oldStore = track ? this.snapshot() : {};
         callHost("store.clear", { name: this.name });
+        this.refreshWatchAfterWrite();
         var self = this;
         Object.keys(oldStore).forEach(function (key) {
             self.notifyKey(key, undefined, oldStore[key]);
         });
-        this.notifyAny({}, oldStore);
+        if (Object.keys(oldStore).length > 0)
+            this.notifyAny({}, oldStore);
     };
 
     ElectronStore.prototype.reset = function () {
@@ -895,11 +995,13 @@
             throw new TypeError("onDidChange requires a callback");
         var listener = { key: String(key), callback: callback };
         this.listeners.push(listener);
+        try { this.startWatch(); } catch (error) { this.listeners.pop(); throw error; }
         var self = this;
         return function () {
             var index = self.listeners.indexOf(listener);
             if (index >= 0)
                 self.listeners.splice(index, 1);
+            self.stopWatchIfUnused();
         };
     };
 
@@ -908,11 +1010,13 @@
             throw new TypeError("onDidAnyChange requires a callback");
         this.anyListeners.push({ callback: callback });
         var listener = this.anyListeners[this.anyListeners.length - 1];
+        try { this.startWatch(); } catch (error) { this.anyListeners.pop(); throw error; }
         var self = this;
         return function () {
             var index = self.anyListeners.indexOf(listener);
             if (index >= 0)
                 self.anyListeners.splice(index, 1);
+            self.stopWatchIfUnused();
         };
     };
 
@@ -923,10 +1027,36 @@
         }
     });
 
-    function getElectronStore(name) {
-        var key = typeof name === "string" && name.length > 0 ? name : "default";
+    function getElectronStore(options) {
+        var key = "default";
+        var watch = false;
+        if (typeof options === "string") {
+            if (options.length > 0)
+                key = options;
+        } else if (options !== undefined && options !== null) {
+            if (typeof options !== "object" || Array.isArray(options))
+                throw hostError("EINVAL", "invalid electron-store options");
+            Object.keys(options).forEach(function (name) {
+                if (name !== "name" && !(name === "watch" && typeof options.watch === "boolean"))
+                    throw hostError("ERR_HOST_UNSUPPORTED", "electron-store option is not implemented");
+            });
+            watch = options.watch === true;
+            if (watch && (typeof global.setInterval !== "function"
+                          || typeof global.clearInterval !== "function"))
+                throw hostError("ERR_HOST_UNSUPPORTED", "store watch timer is unavailable");
+            if (options.name !== undefined) {
+                if (typeof options.name !== "string" || !options.name.length)
+                    throw hostError("EINVAL", "invalid electron-store name");
+                key = options.name;
+            }
+        }
         if (!Object.prototype.hasOwnProperty.call(stores, key))
             stores[key] = new ElectronStore(key);
+        if (watch && !stores[key].watchEnabled) {
+            stores[key].watchEnabled = true;
+            try { stores[key].startWatch(); }
+            catch (error) { stores[key].watchEnabled = false; throw error; }
+        }
         return stores[key];
     }
 
@@ -941,6 +1071,32 @@
             return Promise.reject(hostError("ERR_HOST_UNSUPPORTED", name + " is not implemented"));
         };
     }
+
+    // Error-first callbacks only; does not emulate every Node util helper.
+    function promisify(original) {
+        if (typeof original !== "function")
+            throw new TypeError("promisify requires a function");
+        var custom = original[promisify.custom];
+        if (custom !== undefined) {
+            if (typeof custom !== "function")
+                throw new TypeError("custom promisify implementation must be a function");
+            return custom;
+        }
+        return function () {
+            var self = this;
+            var args = Array.prototype.slice.call(arguments);
+            return new Promise(function (resolve, reject) {
+                args.push(function (error, value) {
+                    if (error)
+                        reject(error);
+                    else
+                        resolve(value);
+                });
+                original.apply(self, args);
+            });
+        };
+    }
+    promisify.custom = Symbol.for("nodejs.util.promisify.custom");
 
     var fileUtilities = {
         getDirectorySizeAsync: unsupportedAsync("nativelibs.fileUtilities.getDirectorySizeAsync"),
@@ -990,6 +1146,7 @@
         // Electron's preload exposes this alias; the runtime uses it in login
         // startup. It stays inside the same bounded fs policy.
         fsPromise: fs.promises,
+        util: { promisify: promisify },
         nativelibs: nativelibs,
         os: {
             EOL: "\n",
@@ -998,7 +1155,7 @@
             platform: function () { return config.platform || "linux"; },
             type: function () { return config.osType || "Linux"; },
             arch: function () { return config.arch || "x64"; },
-            release: unsupportedOperation("os.release"),
+            release: function () { return callHost("os.release", {}); },
             hostname: unsupportedOperation("os.hostname"),
             networkInterfaces: unsupportedOperation("os.networkInterfaces"),
             cpus: unsupportedOperation("os.cpus")

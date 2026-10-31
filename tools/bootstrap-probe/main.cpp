@@ -227,6 +227,8 @@ QWebEngineScript collectorScript()
         var text = String(value || '');
         if (text.indexOf('ERR_HOST_UNSUPPORTED') >= 0 || text.indexOf('is not implemented') >= 0)
             return 'host operation unsupported';
+        if (text.indexOf('Attempted to resolve unregistered dependency token: "system-time"') >= 0)
+            return 'dependency injection: unregistered system-time';
         if (text.indexOf('Cannot inject the dependency') >= 0)
             return 'dependency injection failure';
         if (text.indexOf('Network Error') >= 0)

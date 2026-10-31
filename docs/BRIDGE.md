@@ -141,20 +141,43 @@ policy layer and a diagnostic integration, not a production Electron/Node
 emulation.
 
 Debugger inspection of the earlier `bind` error identified a store wrapper
-binding methods absent from the original preload. The preload now exposes local
-store change listeners, but they observe only writes through the same preload;
-cross-process changes and complete electron-store semantics are not implemented.
+binding methods absent from the original preload. The runtime calls
+`getElectronStore` with named options and `watch: true`. The bounded preload
+supports named stores and best-effort external-change notifications: it polls an
+app-rooted snapshot every two seconds while listeners exist, with at most 16
+active watched stores per renderer. It stops polling when listeners unsubscribe.
+Tests exercise changes made by a second backend instance, no-op writes and local
+notification deduplication. Changes made and reverted between polls can be missed;
+file-system races, large-store cost and production origin/frame policy remain
+unresolved. Defaults and reset remain explicitly unsupported, and this is not
+full electron-store watch compatibility.
+Store names and snapshot keys are held in prototype-free maps, including keys
+such as `__proto__`. Filesystem containment also rejects dangling symlinks before
+write attempts; this does not eliminate the documented symlink race with another
+local process.
+The file limit is checked on reads, append totals and copy sources; bounded
+reads avoid loading an arbitrarily large file into memory. Local concurrent file
+modification can still race these checks, so this is not an OS-enforced quota.
+With no global `Buffer`, an unencoded filesystem read returns a `Uint8Array`
+with whole-value `toString()` support for UTF-8, base64 and hex. It is not a
+Node Buffer: slice decoding and other encodings fail explicitly, and Buffer
+methods and identity are not emulated. A WebEngine test covers UTF-8, invalid
+bytes, BOM, hex and base64; this does not establish runtime-wide compatibility.
 `reset` fails explicitly because defaults are not implemented. Resource usage,
 CPU details, cache clearing, clipboard and zoom methods also fail explicitly;
 diagnostic stub values from earlier experiments are not production evidence.
+`$znode.util.promisify` provides error-first callback conversion and supports
+the custom promisify symbol; it is not a complete Node `util` implementation.
+`$znode.os.release` reads the actual kernel version. Hostname and network
+interfaces remain unsupported rather than silently exposing identifying data.
 The probe now omits raw console messages and classifies exceptions, rather than
 logging potentially sensitive runtime values.
 
 Measured run with `--rewrite-csp --block-remote --stub-preload --host-api`:
 
 - the page still loads (`Zalo - Đăng nhập Zalo`), with no network requests;
-- 18 synchronous host requests were served and recorded as
-  `electron.appVersion`, `electron.path`, `store.get`, `store.set`, `fs.mkdir`, `fs.access`,
+- 22 synchronous host requests were served and recorded as
+  `electron.appVersion`, `electron.path`, `store.get`, `store.set`, `os.release`, `fs.mkdir`, `fs.access`,
   `fs.exists`;
 - the preload self-test in `test_host_preload` additionally proves path helpers,
   UTF-8/base64 file round-trips, `fsPromise`, electron-rooted paths, store

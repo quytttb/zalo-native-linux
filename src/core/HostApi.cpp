@@ -10,6 +10,7 @@
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QStringList>
+#include <QSysInfo>
 
 #include <utility>
 
@@ -54,13 +55,15 @@ QJsonObject HostApi::dispatch(const QJsonObject &request) const
     static const QStringList knownOperations = {
         QStringLiteral("electron.path"), QStringLiteral("electron.appPath"),
         QStringLiteral("electron.appVersion"), QStringLiteral("fs.ensureDir"),
+        QStringLiteral("os.release"),
         QStringLiteral("fs.access"), QStringLiteral("fs.exists"), QStringLiteral("fs.stat"),
         QStringLiteral("fs.lstat"), QStringLiteral("fs.readFile"), QStringLiteral("fs.writeFile"),
         QStringLiteral("fs.appendFile"), QStringLiteral("fs.mkdir"), QStringLiteral("fs.readdir"),
         QStringLiteral("fs.unlink"), QStringLiteral("fs.rmdir"), QStringLiteral("fs.rename"),
         QStringLiteral("fs.copyFile"), QStringLiteral("fs.realpath"), QStringLiteral("store.get"),
         QStringLiteral("store.set"), QStringLiteral("store.has"), QStringLiteral("store.delete"),
-        QStringLiteral("store.clear"), QStringLiteral("store.keys")};
+        QStringLiteral("store.clear"), QStringLiteral("store.keys"),
+        QStringLiteral("store.snapshot")};
     if (knownOperations.contains(op) && !m_operations.contains(op)
         && m_operations.size() < kMaxRecordedOperations)
         m_operations.append(op);
@@ -133,6 +136,12 @@ QString HostApi::resolvePath(const QString &input, bool mustExist, QString *code
     QString probe = path;
     QFileInfo probeInfo(probe);
     while (!probeInfo.exists() && probe != m_dataRoot) {
+        // exists() follows symlinks, so a dangling link must be rejected
+        // before walking to its parent: creating through it could otherwise
+        // create a file outside the allowed root.
+        if (probeInfo.isSymLink())
+            return fail(QStringLiteral("ERR_HOST_OUTSIDE_ROOT"),
+                        QStringLiteral("cannot resolve a dangling symbolic link"));
         const QString parent = probeInfo.absolutePath();
         if (parent.isEmpty() || parent == probe)
             break;
@@ -206,7 +215,7 @@ QJsonObject HostApi::readStore(const QString &name) const
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly))
         return error(QStringLiteral("EACCES"), QStringLiteral("cannot read electron-store file"));
-    const QByteArray data = file.readAll();
+    const QByteArray data = file.read(kMaxStoreBytes + 1);
     if (data.size() > kMaxStoreBytes)
         return error(QStringLiteral("EFBIG"), QStringLiteral("electron-store file is too large"));
 
@@ -271,6 +280,14 @@ QJsonObject HostApi::handle(const QString &op, const QJsonObject &args) const
         return ok(m_appRoot);
     if (op == QLatin1String("electron.appVersion"))
         return ok(m_appVersion);
+
+    if (op == QLatin1String("os.release")) {
+        const QString release = QSysInfo::kernelVersion();
+        if (release.isEmpty())
+            return error(QStringLiteral("ERR_HOST_UNSUPPORTED"),
+                         QStringLiteral("kernel release is unavailable"));
+        return ok(release);
+    }
 
     if (op == QLatin1String("fs.ensureDir")) {
         const QString path = resolvePath(args.value(QStringLiteral("path")).toString(), false,
@@ -357,7 +374,7 @@ QJsonObject HostApi::handle(const QString &op, const QJsonObject &args) const
         QFile file(path);
         if (!file.open(QIODevice::ReadOnly))
             return error(QStringLiteral("EACCES"), QStringLiteral("cannot read file"));
-        const QByteArray data = file.readAll();
+        const QByteArray data = file.read(kMaxFileBytes + 1);
         if (data.size() > kMaxFileBytes)
             return error(QStringLiteral("EFBIG"), QStringLiteral("file is too large"));
 
@@ -398,9 +415,14 @@ QJsonObject HostApi::handle(const QString &op, const QJsonObject &args) const
             return error(QStringLiteral("EFBIG"), QStringLiteral("file is too large"));
 
         if (append) {
+            const QFileInfo existing(path);
+            if (existing.exists() && !existing.isFile())
+                return error(QStringLiteral("EINVAL"), QStringLiteral("not a regular file"));
             QFile file(path);
             if (!file.open(QIODevice::Append))
                 return error(QStringLiteral("EACCES"), QStringLiteral("cannot append to file"));
+            if (file.size() > kMaxFileBytes - data.size())
+                return error(QStringLiteral("EFBIG"), QStringLiteral("file is too large"));
             if (file.write(data) != data.size())
                 return error(QStringLiteral("EIO"), QStringLiteral("cannot append to file"));
             return ok(true);
@@ -508,6 +530,8 @@ QJsonObject HostApi::handle(const QString &op, const QJsonObject &args) const
             return error(code, message);
         if (!QFileInfo(from).isFile())
             return error(QStringLiteral("EISDIR"), QStringLiteral("source is not a file"));
+        if (QFileInfo(from).size() > kMaxFileBytes)
+            return error(QStringLiteral("EFBIG"), QStringLiteral("file is too large"));
         if (to == m_dataRoot || QFileInfo(to).isDir())
             return error(QStringLiteral("EISDIR"), QStringLiteral("destination is a directory"));
         if (QFileInfo::exists(to))
@@ -537,6 +561,9 @@ QJsonObject HostApi::handle(const QString &op, const QJsonObject &args) const
         const QString name = args.value(QStringLiteral("name")).toString();
         if (op == QLatin1String("store.clear"))
             return writeStore(name, QJsonObject{});
+
+        if (op == QLatin1String("store.snapshot"))
+            return readStore(name);
 
         if (op == QLatin1String("store.keys")) {
             QJsonObject store = readStore(name);

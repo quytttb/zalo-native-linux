@@ -137,6 +137,21 @@ int commandExtract(const QString &argument, const QString &entry, const QString 
     return 0;
 }
 
+int commandCheckUnpacked(const QString &argument)
+{
+    const QString path = resolveArchivePath(argument);
+    if (path.isEmpty())
+        return fail(QStringLiteral("no app.asar found"));
+    QString error;
+    const auto archive = ZaloNative::AsarArchive::open(path, &error);
+    if (!archive)
+        return fail(error);
+    const QJsonObject result = archive->verifyUnpacked();
+    QTextStream out(stdout);
+    out << QString::fromUtf8(QJsonDocument(result).toJson(QJsonDocument::Indented));
+    return result.value(QStringLiteral("ok")).toBool() ? 0 : 2;
+}
+
 int commandBridgeSpec()
 {
     ZaloNative::BridgeRouter router;
@@ -170,7 +185,8 @@ int main(int argc, char *argv[])
     parser.addPositionalArgument(
         QStringLiteral("command"),
         QStringLiteral("inspect <path> | import <app-dir> <destination> | verify <runtime-dir> | "
-                       "list <path> [prefix] | extract <path> <entry> <output> | bridge-spec"));
+                       "list <path> [prefix] | extract <path> <entry> <output> | "
+                       "check-unpacked <path> | bridge-spec"));
 
     parser.process(app);
     const QStringList positional = parser.positionalArguments();
@@ -208,6 +224,11 @@ int main(int argc, char *argv[])
         if (positional.size() != 4)
             return fail(QStringLiteral("usage: zalort extract <runtime-dir|app.asar> <entry> <output>"));
         return commandExtract(positional.at(1), positional.at(2), positional.at(3));
+    }
+    if (command == QLatin1String("check-unpacked")) {
+        if (positional.size() != 2)
+            return fail(QStringLiteral("usage: zalort check-unpacked <runtime-dir|app.asar>"));
+        return commandCheckUnpacked(positional.at(1));
     }
     if (command == QLatin1String("bridge-spec"))
         return commandBridgeSpec();

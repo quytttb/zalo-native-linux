@@ -9,7 +9,7 @@ and the latest runtime evidence in [RUNTIME-EVIDENCE.md](RUNTIME-EVIDENCE.md).
 
 - ASAR reader, app-directory runtime detection, manifest/locator, local-path
   resolver and `zalort` CLI (`inspect`, `import`, `verify`, `list`, `extract`,
-  `bridge-spec`).
+  `check-unpacked`, `bridge-spec`).
 - Static preload inventory: exposed APIs, synchronous call sites, Linux IPC
   channels, native `.node`/`.so` dependencies and warnings.
 - Isolated runtime import with per-file/tree SHA-256, `runtime.json`, expected
@@ -33,8 +33,8 @@ working official Zalo runtime host.
 
 ## Evidence from the available runtime
 
-The only runtime available here is an extracted **community AppImage**, not an
-official Zalo Linux release. It is app version `26.10.20`, build commit
+One reference runtime is an extracted **community AppImage**, not an official
+Zalo Linux release. It is app version `26.10.20`, build commit
 `12ef36d`, entry `pc-dist/index.html`. Static inspection found 46 exposed preload
 names, 21 synchronous call sites (19 with computed channels), 12 Linux IPC
 channels and 15 native library files. The imported copy contains 13,369 files
@@ -42,7 +42,9 @@ channels and 15 native library files. The imported copy contains 13,369 files
 `f46e7998416732498476f6134234edf0d20c3b75fe1d8e54ef5d7dd84a3d2a3a`.
 
 `zalort verify` reports local integrity only; `sourceVerified` remains `false`.
-No vendor signature or trusted official hash was available.
+A macOS DMG downloaded through Zalo's site has also been partially extracted
+for offline probing. Its full import is blocked by 52 unpacked-file metadata
+mismatches, and its complete vendor signature/bundle has not been verified.
 
 The bootstrap probe initially produced no usable renderer: the page document
 loaded, but the runtime's CSP refused its own local stylesheets and scripts under
@@ -66,8 +68,8 @@ The synchronous-XHR spike returns `sync:200:pong` through a Qt custom scheme.
 That is transport proof only, not a complete Electron `sendSync`/IPC bridge.
 
 The bounded `--host-api` integration now serves the real preload from an isolated
-temporary data root. In the recorded run it handled 18 calls
-(`electron.appVersion`, `electron.path`, `store.get`, `store.set`, `fs.mkdir`,
+temporary data root. In the recorded run it handled 22 calls
+(`electron.appVersion`, `electron.path`, `store.get`, `store.set`, `os.release`, `fs.mkdir`,
 `fs.access`, `fs.exists`); no remote request reached the interceptor. A
 dependency-injection rejection remains, so the subset is not a working bridge. Unit/WebEngine tests
 cover path helpers, file/store round-trips, `fsPromise` availability,
@@ -76,7 +78,7 @@ a policy layer, not an OS sandbox or a production IPC implementation.
 
 ## Not implemented or not verified
 
-- Selection/pinning of a runtime obtained from an official Zalo source.
+- Full import and integrity/signature assessment of the selected macOS baseline.
 - Production integration and security review of the scoped CSP rewrite; no
   global web-security or CSP bypass is accepted.
 - A production preload/IPC bridge covering the required Electron/Node APIs,

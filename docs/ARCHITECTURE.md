@@ -64,7 +64,7 @@ production host. With it, the next blockers are preload members
 diagnostic only: it shows startup calling `$zelectron.getPath`,
 `$znode.path`/`fs`/`fsExtra` and telemetry APIs, and that IndexedDB opens
 successfully. `--host-api` goes one step further with the bounded
-`renderer/host/preload.js` and `HostApi`; it served 18 host calls in the latest recorded run, but a dependency-injection
+`renderer/host/preload.js` and `HostApi`; it served 22 host calls in the latest recorded run, but a dependency-injection
 failure remains. This is concrete
 bootstrap evidence, not a successful host.
 

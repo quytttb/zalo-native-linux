@@ -113,6 +113,12 @@ Entries are directories (`{"files": {...}}`), links (`{"link": "..."}`), or
 files (`{"size": N, "offset": "N", "unpacked": bool}`).
 `unpacked` files live in `<archive>.unpacked/<path>`.
 
+`zalort check-unpacked /path/to/app.asar` compares each unpacked file's size and
+SHA-256 with the metadata in the archive. After a successful archive open, it
+outputs counts only and exits 2 if a comparison cannot be verified or differs;
+an archive-open failure exits 1. It does not verify packed entries, macOS
+signatures or vendor authenticity. Local modifications can race the check.
+
 Hardening: 256 MiB header cap, 500k node cap, 64-level tree depth cap,
 8-level link depth cap, unsafe-name rejection (`..`, slashes in names), strict
 bounds checks on every payload, size cap on reads.
@@ -138,7 +144,7 @@ With the scoped rewrite, the next blockers are preload members:
 shows startup enumerating the preload surface and calling `$zelectron.getPath`,
 `$znode.path`/`fs`/`fsExtra` and telemetry APIs; that mode is contract discovery,
 not a working bridge. `--host-api` injects the bounded `renderer/host/preload.js`
-against an isolated data root; it served 18 host calls in the latest recorded probe, but a remaining
+against an isolated data root; it served 22 host calls in the latest recorded probe, but a remaining
 dependency-injection failure shows that the subset is not a complete preload bridge. IndexedDB opens successfully in the `zalo-app://` origin;
 the runtime's `do open indexeddb ...` lines are its own wrapper logging. No remote
 host was attempted during the observation window. `localStorage` and IndexedDB

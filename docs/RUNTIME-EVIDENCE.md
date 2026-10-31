@@ -94,6 +94,90 @@ linux-offline:clear
 linux-offline:refresh
 ```
 
+## Vendor download for the macOS baseline
+
+On 2026-10-30 the download link on `https://www.zalo.me/pc` directed a macOS
+user agent via `https://www.zalo.me/download/zalo-pc?utm=90000` to
+`https://res-download-pc.zadn.vn/mac/ZaloSetup-universal-26.10.20.dmg`, then a
+CDN mirror. The 337,901,830-byte DMG was downloaded outside the repository;
+its local SHA-256 is
+`a45d30b7f7b060f76b87722ef419b8f41d23a2913cdef084dcb0955dde8d85a0`.
+Read-only archive inspection found `Zalo.app/Contents/Resources/app.asar` and
+`app.asar.unpacked`; `Info.plist` declares bundle `com.vng.zalo`, version
+`26.10.20`, build `26.10.20.3253`. The redirect chain documents where the file
+was obtained; no vendor-published hash or macOS signature has been independently
+verified. Nothing from the archive is included in this repository.
+
+For offline diagnostics only, `pc-dist`, `main-dist`, `package.json` and
+`bootstrap.js` were extracted from that archive into a separate cache directory
+(13,096 files). This is a partial renderer extraction, not a full runtime import;
+macOS native libraries and other archive files are not included. `zalort inspect`
+identified version `26.10.20`, entry `pc-dist/index.html`, 44 exposed preload
+names and 20 static synchronous call sites (19 computed). The reported counts
+describe this extraction and are not a complete compatibility guarantee.
+
+An attempt to extract all archive entries using the current strict ASAR reader
+stopped on an unpacked native file whose size differed from the ASAR header. A
+separate read-only inventory found all 101 unpacked entries present: 49 matched
+both their declared size and embedded SHA-256, and 52 differed in both. These
+are local comparisons against metadata in the same ASAR, not vendor signature
+verification. The cause is unverified; no mismatch check was bypassed and the
+partial full extraction is not an imported or verified runtime.
+The repository command `zalort check-unpacked <app.asar>` reproduces these counts
+and exits 2; it checks unpacked entries against metadata inside the same archive,
+not packed entries, macOS code signatures or an independently trusted digest.
+All 52 different files were Mach-O binaries (`.node`/`.dylib`) with a code
+signature load command found by static inspection. This is consistent with a
+possible post-ASAR signing change, but presence of the command neither verifies
+the signature nor proves the cause of the mismatch.
+
+One mismatched arm64 `db-cross-v4-native.node` was examined further, not the
+whole app. Its CMS signature verified over its CodeDirectory, and all 18
+SHA-256 code-page hashes matched the file. Its signer certificate identifies
+`Developer ID Application: VNG ONLINE CO.,LTD (CVB6BX97VM)`. OpenSSL could
+build the chain to the Apple root downloaded from Apple's PKI page only with
+`-ignore_critical`; without that option it rejected an unhandled critical
+extension. This limited check does **not** validate Apple's critical-extension
+policy, revocation, timestamp, bundle seal or the remaining binaries, and does
+not establish why the ASAR metadata differs. It is not equivalent to a full
+macOS `codesign`/Gatekeeper verification and does not authorize bypassing the
+ASAR checks.
+
+With `--rewrite-csp --block-remote --stub-preload --host-api --wait-ms 8000`,
+the isolated off-the-record probe loaded the entry with title `Zalo - Đăng nhập
+Zalo`; IndexedDB opened, 19 host requests were recorded and no remote request
+reached the interceptor. One dependency-injection rejection remained. Diagnostic
+stubs were used; this is not a successful real login or end-to-end bootstrap.
+The installed community runtime has not been verified to match this archive.
+
+Earlier debugger observations found a missing store `watch` option. Bounded,
+best-effort polling now exists and is tested, but the `system-time` rejection
+persists. The debugger also observed `zelectronNative.getResourceUsage` throwing
+while a runtime image-cache module initialized; Qt host support for equivalent
+image resource accounting does not exist yet, so this remains explicitly
+unsupported. These observations use diagnostic stubs and a partial extraction;
+they do not establish whether the resource error causes the DI failure. Runtime
+code registers `system-time` in login startup, but the reason registration was
+not reached is not yet proven.
+
+## Local Olaz DMG and installed Zalo
+
+On 2026-10-30, read-only inspection of the user-provided `Olaz-1.0.dmg`
+identified an Olaz 1.0 macOS app with host scripts, a bridge table and adapters.
+Its host script describes named store options and dot-path keys, and its bridge
+uses WebKit message handlers and a Proxy-based compatibility layer. These are
+third-party reference observations, not vendor-runtime or security verification;
+no Olaz code or assets are included here. The local DMG SHA-256 is
+`ed19821ba8a484b6af37bd2e97ad48719df81e72d3578c701493c24bef516bf2`.
+
+The installed `Zalo.AppImage` is identified by its desktop entry as an
+**unofficial Linux port**; its version marker says `26.10.20`. Its local SHA-256
+is `c0f56646bf9524abb424476b93944d72f730fc7780d0a2b76ab8476bb120d198`.
+These observations do not authenticate its origin or prove it matches the
+separately imported runtime. The existing launcher uses `--no-sandbox`; that is
+not a security recommendation or a default for this project. No user session
+was inspected or copied.
+
 ## Sync transport spike
 
 `tests/test_sync_scheme.cpp` proves that a **synchronous XHR** issued by page
@@ -240,8 +324,8 @@ Observed result:
 - `hostApisInjected: true`, `hostApiMode: bounded-diagnostic`;
 - the page still loaded with title `Zalo - Đăng nhập Zalo`;
 - `blockedRemoteCount: 0`, no remote host was contacted;
-- `hostRequestCount: 18`, with recorded operations `electron.appVersion`,
-  `electron.path`, `store.get`, `store.set`, `fs.mkdir`, `fs.access`, `fs.exists`;
+- `hostRequestCount: 22`, with recorded operations `electron.appVersion`,
+  `electron.path`, `store.get`, `store.set`, `os.release`, `fs.mkdir`, `fs.access`, `fs.exists`;
 - the stub preload still covered other names; one dependency-injection
   rejection remained.
 

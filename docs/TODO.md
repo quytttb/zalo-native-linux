@@ -47,7 +47,22 @@ runtime chính thức; số M1–M6 dưới đây được cập nhật theo pla
 
 - [x] Khảo sát tĩnh mô hình Olaz và nhận diện layout renderer bên ngoài ASAR
   launcher của AppImage cộng đồng (`AppDir/app/pc-dist/`).
-- [ ] Chọn runtime Zalo PC từ nguồn chính thức, ghim version làm baseline.
+- [x] Chọn DMG Zalo macOS 26.10.20 làm baseline khảo sát, ghim hash file tải;
+  hash cục bộ không phải chữ ký hay hash được vendor xác thực.
+- [x] Tải DMG Zalo macOS 26.10.20 qua link trang Zalo PC, ghi hash cục bộ và
+  metadata bundle; chưa xác minh chữ ký/vendor hash hoặc import runtime đầy đủ.
+- [x] Trích riêng renderer/preload từ DMG vào cache ngoài repo và chạy probe
+  offline: trang load, IndexedDB mở, 19 lời gọi host, còn một lỗi DI. Đây là
+  extraction một phần và có diagnostic stub, không phải bootstrap hoàn chỉnh.
+- [ ] Xử lý an toàn việc import toàn bộ runtime DMG: 52/101 file unpacked
+  khác cả size và SHA-256 trong header ASAR; chưa rõ nguyên nhân, không bỏ qua
+  kiểm tra hoặc tuyên bố signature đã xác minh.
+- [x] Đối chiếu giới hạn một Mach-O: CMS và 18 code-page hash khớp; kiểm tra
+  chuỗi cần `-ignore_critical`, chưa phải xác minh macOS/bundle đầy đủ.
+- [x] Chặn ASAR unpacked file trỏ ra ngoài root và giới hạn dữ liệu đọc; test
+  symlink ngoài root và size mismatch (chưa loại bỏ race tiến trình local).
+- [x] Thêm `zalort check-unpacked`: kiểm tra size/SHA-256 theo metadata ASAR,
+  chỉ báo số lượng; test khớp, sai hash/size, thiếu integrity và giới hạn đọc.
 - [x] Nhận diện đúng ASAR/app đã extract, entry HTML và native dependencies;
   `inspect` đọc được cả `pc-dist/index.html` và danh sách `.node`/`.so`.
 - [x] Import riêng, lưu nguồn/version/hash và xác minh tính toàn vẹn cục bộ;
@@ -58,8 +73,30 @@ runtime chính thức; số M1–M6 dưới đây được cập nhật theo pla
   `$znode.path`/`fs`/`fsExtra`; xác nhận IndexedDB mở được; không login/mạng.
 - [x] Host API hẹp có policy: `src/core/HostApi` + `renderer/host/preload.js`
   cho `$znode.path`, `fs`/`fsExtra`/`fsPromise`, `$zelectron` path/version/store;
-  probe `--host-api` phục vụ 18 lời gọi trong data root tạm và test traversal/
+  probe `--host-api` phục vụ 22 lời gọi trong data root tạm và test traversal/
   symlink/EFBIG/unsupported. Chưa phải IPC production.
+- [x] Chặn symlink có đích chưa tồn tại trong `HostApi`; test ghi/ghi nối và
+  đường dẫn con không tạo file ngoài root. Đây chưa giải quyết race symlink.
+- [x] Áp dụng giới hạn file khi append/copy và giới hạn lượng đọc file/store;
+  test vượt 8 MiB và xác nhận copy lỗi không xóa file đích.
+- [x] Store preload xử lý tên store và khóa `__proto__` bằng map không có
+  prototype; test WebEngine kiểm tra cả snapshot và listener cục bộ.
+- [x] Nhận `getElectronStore({name, watch:true})`, tách store theo tên và theo
+  dõi thay đổi bằng polling giới hạn; test dùng backend thứ hai, unsubscribe,
+  không lặp event local và giới hạn số watcher.
+- [ ] Hoàn thiện semantics store defaults/reset và đồng bộ production; polling
+  hiện có thể bỏ lỡ thay đổi giữa hai lần đọc và chưa thay thế watcher thật.
+- [ ] Điều tra token DI `system-time` chưa đăng ký trong shared-database
+  detection; đã quan sát `getResourceUsage` unsupported khi module ảnh khởi tạo,
+  nhưng chưa kết luận quan hệ nhân quả.
+- [x] Cung cấp `os.release` theo kernel thật và `util.promisify` error-first;
+  test callback, lỗi, receiver và custom symbol, không giả lập toàn bộ Node util.
+- [ ] Thiết kế backend Qt cho `zelectronNative.getResourceUsage` hoặc phương án
+  tương thích được xác minh; không báo image cache bằng 0 giả.
+- [x] Bổ sung `toString()` UTF-8/base64/hex cho byte trả từ `readFileSync`
+  không encoding khi thiếu Buffer, có test BOM và byte UTF-8 lỗi.
+- [ ] Kiểm chứng và bổ sung tương thích Node Buffer đầy đủ nếu runtime cần;
+  byte hiện chỉ là `Uint8Array`, không hỗ trợ slice decoding hoặc mọi encoding.
 - [ ] Phân loại API preload/IPC thiết yếu và quyết định backend Linux thay thế
   cho từng dependency (đã có bảng quyết định và một subset host chạy được trong
   probe; dependency injection và phần lớn IPC/native vẫn chưa có backend).

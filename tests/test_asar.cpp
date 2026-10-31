@@ -2,6 +2,7 @@
 #include "RuntimeLocator.h"
 #include "RuntimeManifest.h"
 
+#include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
@@ -21,6 +22,7 @@ struct FileSpec
     QByteArray data;
     bool unpacked = false;
     QString link;
+    bool includeIntegrity = true;
 };
 
 QJsonObject nodeFor(const FileSpec &spec, qint64 offset)
@@ -33,6 +35,12 @@ QJsonObject nodeFor(const FileSpec &spec, qint64 offset)
     node.insert(QStringLiteral("size"), spec.data.size());
     if (spec.unpacked) {
         node.insert(QStringLiteral("unpacked"), true);
+        if (spec.includeIntegrity) {
+            node.insert(QStringLiteral("integrity"), QJsonObject{
+                {QStringLiteral("algorithm"), QStringLiteral("SHA256")},
+                {QStringLiteral("hash"), QString::fromLatin1(
+                     QCryptographicHash::hash(spec.data, QCryptographicHash::Sha256).toHex())}});
+        }
     } else {
         node.insert(QStringLiteral("offset"), QString::number(offset));
     }
@@ -120,6 +128,9 @@ private slots:
     void rejectsUnsafePaths();
     void rejectsMalformedArchives();
     void requiresUnpackedFiles();
+    void rejectsUnsafeUnpackedFiles();
+    void rejectsUnpackedSizeMismatch();
+    void verifiesUnpackedMetadata();
     void readsCheckedInFixture();
 };
 
@@ -241,6 +252,92 @@ void AsarArchiveTest::requiresUnpackedFiles()
     QString error;
     QVERIFY(!AsarArchive::open(path, &error));
     QVERIFY(error.contains(QStringLiteral("unpacked")));
+}
+
+void AsarArchiveTest::rejectsUnsafeUnpackedFiles()
+{
+    QTemporaryDir dir;
+    QTemporaryDir outside;
+    QVERIFY(dir.isValid());
+    QVERIFY(outside.isValid());
+    const QString path = writeArchive(dir, {
+        {QStringLiteral("native/file.node"), QByteArray("safe"), true, {}},
+    });
+    QVERIFY(!path.isEmpty());
+    QString error;
+    auto archive = AsarArchive::open(path, &error);
+    QVERIFY2(archive.has_value(), qPrintable(error));
+    const QString outsidePath = outside.filePath(QStringLiteral("file.node"));
+    QFile external(outsidePath);
+    QVERIFY(external.open(QIODevice::WriteOnly));
+    QCOMPARE(external.write("evil"), 4);
+    external.close();
+
+    const QString unpacked = dir.filePath(QStringLiteral("sample.asar.unpacked/native/file.node"));
+    QVERIFY(QFile::remove(unpacked));
+    QVERIFY(QFile::link(outsidePath, unpacked));
+    QByteArray data;
+    QVERIFY(!archive->readFile(QStringLiteral("native/file.node"), &data, &error));
+    QVERIFY(error.contains(QStringLiteral("unsafe")));
+    QVERIFY(!AsarArchive::open(path, &error));
+    QVERIFY(error.contains(QStringLiteral("unsafe")));
+}
+
+void AsarArchiveTest::rejectsUnpackedSizeMismatch()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = writeArchive(dir, {
+        {QStringLiteral("native/file.node"), QByteArray("safe"), true, {}},
+    });
+    QVERIFY(!path.isEmpty());
+    QFile unpacked(dir.filePath(QStringLiteral("sample.asar.unpacked/native/file.node")));
+    QVERIFY(unpacked.open(QIODevice::Append));
+    QCOMPARE(unpacked.write("changed"), 7);
+    unpacked.close();
+    QString error;
+    const auto archive = AsarArchive::open(path, &error);
+    QVERIFY2(archive.has_value(), qPrintable(error));
+    QByteArray data;
+    QVERIFY(!archive->readFile(QStringLiteral("native/file.node"), &data, &error));
+    QVERIFY(error.contains(QStringLiteral("size mismatch")));
+    QVERIFY(data.isEmpty());
+}
+
+void AsarArchiveTest::verifiesUnpackedMetadata()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = writeArchive(dir, {
+        {QStringLiteral("native/good"), QByteArray("good"), true, {}},
+        {QStringLiteral("native/hash"), QByteArray("abcd"), true, {}},
+        {QStringLiteral("native/size"), QByteArray("xy"), true, {}},
+        {QStringLiteral("native/nohash"), QByteArray("ok"), true, {}, false},
+    });
+    QVERIFY(!path.isEmpty());
+    QFile changed(dir.filePath(QStringLiteral("sample.asar.unpacked/native/hash")));
+    QVERIFY(changed.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    QCOMPARE(changed.write("wxyz"), 4);
+    changed.close();
+    QFile grown(dir.filePath(QStringLiteral("sample.asar.unpacked/native/size")));
+    QVERIFY(grown.open(QIODevice::Append));
+    QCOMPARE(grown.write("z"), 1);
+    grown.close();
+
+    QString error;
+    const auto archive = AsarArchive::open(path, &error);
+    QVERIFY2(archive.has_value(), qPrintable(error));
+    const QJsonObject result = archive->verifyUnpacked();
+    QVERIFY(!result.value(QStringLiteral("ok")).toBool());
+    QCOMPARE(result.value(QStringLiteral("total")).toInt(), 4);
+    QCOMPARE(result.value(QStringLiteral("verified")).toInt(), 1);
+    QCOMPARE(result.value(QStringLiteral("sizeMismatch")).toInt(), 1);
+    QCOMPARE(result.value(QStringLiteral("hashMismatch")).toInt(), 2);
+    QCOMPARE(result.value(QStringLiteral("missingIntegrity")).toInt(), 1);
+    QCOMPARE(result.value(QStringLiteral("unreadable")).toInt(), 0);
+    const QJsonObject bounded = archive->verifyUnpacked(2);
+    QCOMPARE(bounded.value(QStringLiteral("tooLarge")).toInt(), 3);
+    QVERIFY(!bounded.value(QStringLiteral("ok")).toBool());
 }
 
 void AsarArchiveTest::readsCheckedInFixture()
