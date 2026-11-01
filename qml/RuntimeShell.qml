@@ -3,7 +3,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-// Native-runtime mode. This screen reports what the host found in the
+// Historical runtime diagnostics. This screen reports what the host found in the
 // user-supplied Zalo desktop runtime. It deliberately does not pretend to be a
 // chat UI: the official renderer/bootstrap is not hosted yet.
 Item {
@@ -52,7 +52,7 @@ Item {
                     Text {
                         id: nativeLabel
                         anchors.centerIn: parent
-                        text: "Runtime native"
+                        text: "Runtime lịch sử"
                         color: Theme.accentHover
                         font.pixelSize: 10
                         font.weight: Font.DemiBold
@@ -212,7 +212,7 @@ Item {
                         anchors.margins: 16
                         text: "Qt host chưa bootstrap lõi này. Màn hình này không phải chat và "
                               + "không có phiên đăng nhập.\n\n"
-                              + "Blocker M1/M2: preload dùng ipcRenderer.sendSync và nhiều "
+                              + "Blocker lịch sử: preload dùng ipcRenderer.sendSync và nhiều "
                               + "API contextBridge; QWebChannel chỉ bất đồng bộ. Cần chứng minh "
                               + "một cơ chế sync an toàn (ví dụ custom scheme + sync XHR cùng "
                               + "origin) trước khi nối UI chat."

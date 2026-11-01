@@ -25,8 +25,8 @@ Item {
 
         Text {
             Layout.fillWidth: true
-            text: "Ứng dụng cần Qt WebEngine để host lõi Zalo PC chính thức. "
-                  + "Hãy cài gói có thành phần WebEngine hoặc build lại với -DZALO_WEBENGINE=ON."
+            text: "Chế độ Web thử nghiệm cần Qt WebEngine. Backend Qt/C++ mặc định "
+                  + "không cần WebEngine; chạy lại ứng dụng mà không có --web."
             color: Theme.textMuted
             font.pixelSize: 13
             wrapMode: Text.Wrap

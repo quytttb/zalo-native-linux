@@ -1,12 +1,10 @@
-# Archived — discontinued direct-protocol QR probe
+# Historical standalone direct-protocol QR probe
 
-**No longer an active milestone.** The user selected the Olaz-style architecture:
-official Zalo PC core in Qt WebEngine with Qt 6/QML native UI. The active M1 is
-runtime provisioning/host feasibility in [PLAN.md](PLAN.md), not this experiment.
-Do not extend this probe into a protocol, crypto, realtime or messaging backend.
-Keep the results below as historical evidence only; QR success here does not
-validate login in the official-runtime host. The code is retained in `src/probe/`
-but excluded from the default build (`ZALO_BUILD_QR_PROBE=OFF`).
+The standalone probe remains historical and is excluded from the default build
+(`ZALO_BUILD_QR_PROBE=OFF`). On 2026-11-02 the project selected a native C++
+backend again; its new Web QR state machine was adapted from this old probe.
+The old live observation below does not verify the new code or establish PC/chat
+session compatibility. See [PLAN.md](PLAN.md) and [STATUS.md](STATUS.md).
 
 `zalo-qr-probe` is a separate experimental C++/Qt Widgets program. It does not
 use the web wrapper, Electron, Node, Python or the existing Zalo profile. It is
@@ -49,11 +47,10 @@ commit 2a7e360257dfe98e2eb48dc46bbf389834be7e0b](https://github.com/RFS-ADRENO/z
 No upstream source files are bundled. The GPLv3 Zalo10 client and Olaz scripts
 were studied for architecture only and are not copied into this probe.
 
-At discontinuation, the experiment lacked offline HTTP/TLS state-machine tests,
-session persistence, integrated protocol codec, conversations, realtime receive,
-send and reconnect. These are **not open implementation tasks for this probe**.
-Work now follows [PLAN.md](PLAN.md) using the official core instead of rebuilding
-these Zalo protocol features. The old plan entry point is [NATIVE-PLAN.md](NATIVE-PLAN.md).
+The old standalone probe lacked offline HTTP/TLS state-machine tests, session
+persistence, integrated protocol codec, conversations, realtime receive, send
+and reconnect. The new backend has synthetic state-machine tests, but persistence
+and chat remain open in [TODO.md](TODO.md); the old executable remains separate.
 
 ## Verification on 2026-10-30
 

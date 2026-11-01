@@ -1,5 +1,9 @@
 # Bridge — demo contract and official-runtime integration
 
+**Historical WebEngine architecture.** Since 2026-11-02 the active backend is
+direct Qt/C++; this document records retained demo/runtime tooling, not the
+chosen product architecture. See [ARCHITECTURE.md](ARCHITECTURE.md).
+
 The chosen architecture uses the official Zalo core with Qt 6/QML UI. Two
 boundaries are needed: an app state/action bridge between the adapter and native
 models, and a bounded host bridge supplying essential Electron/preload APIs.

@@ -4,6 +4,7 @@
 #include "ConversationFilterModel.h"
 #include "ConversationModel.h"
 #include "MessageModel.h"
+#include "NativeQrLogin.h"
 #include "RuntimeLocator.h"
 
 #include <QDateTime>
@@ -36,13 +37,15 @@ AppController::AppController(const Options &options, QObject *parent)
     , m_conversations(new ConversationModel(this))
     , m_filter(new ConversationFilterModel(this))
     , m_messages(new MessageModel(this))
+    , m_qrLogin(new NativeQrLogin(this))
 {
     m_filter->setSourceModel(m_conversations);
 
     connect(m_router, &BridgeRouter::statePublished, this, &AppController::applyState);
     connect(m_router, &BridgeRouter::logLine, this, &AppController::appendLog);
 
-    detectRuntime();
+    if (runtimeDiagnosticsMode())
+        detectRuntime();
 
     if (m_options.demo) {
         QTimer::singleShot(0, this, &AppController::reloadDemo);
@@ -61,7 +64,12 @@ QAbstractItemModel *AppController::messages()
 
 QObject *AppController::bridgeObject()
 {
-    return m_bridgeObject;
+    return m_options.demo ? m_bridgeObject : nullptr;
+}
+
+QObject *AppController::qrLogin()
+{
+    return m_qrLogin;
 }
 
 QString AppController::runtimeManifestJson() const
@@ -91,6 +99,8 @@ QString AppController::appMode() const
         return QStringLiteral("demo");
     if (m_options.webMode)
         return QStringLiteral("web");
+    if (runtimeDiagnosticsMode())
+        return QStringLiteral("runtime-diagnostics");
     return QStringLiteral("native");
 }
 
@@ -100,9 +110,9 @@ QString AppController::modeLabel() const
         return QStringLiteral("Demo — dữ liệu giả lập");
     if (m_options.webMode)
         return QStringLiteral("Zalo Web thử nghiệm — không phải UI đích");
-    if (!rendererHostEnabled())
-        return QStringLiteral("Runtime native — bản build không có Qt WebEngine");
-    return QStringLiteral("Runtime native — Qt WebEngine host");
+    if (runtimeDiagnosticsMode())
+        return QStringLiteral("Chẩn đoán runtime lịch sử");
+    return QStringLiteral("Backend Qt/C++ thử nghiệm");
 }
 
 QString AppController::sanitizedUrl(const QString &url) const
@@ -206,7 +216,7 @@ void AppController::detectRuntime()
     if (!manifest) {
         m_runtimeStatus = QStringLiteral(
             "Chưa có lõi Zalo PC trong %1.\n\n"
-            "Đây là chế độ runtime native: ứng dụng không mở Zalo Web và không dùng dữ liệu demo. "
+            "Đây là chế độ chẩn đoán runtime lịch sử, không phải backend Qt/C++ hiện tại. "
             "Hãy import một thư mục ứng dụng Zalo đã giải nén bằng:\n"
             "  zalort import <app-dir> ~/.local/share/zalo-native/runtime\n"
             "hoặc truyền --runtime <path>. Lõi Zalo vẫn chưa được tự động chạy.")
@@ -272,6 +282,8 @@ void AppController::detectRuntime()
 
 void AppController::reloadDemo()
 {
+    if (!m_options.demo)
+        return;
     QFile file(QStringLiteral(":/qt/qml/ZaloNative/renderer/demo-state.json"));
     if (!file.open(QIODevice::ReadOnly)) {
         appendLog(QStringLiteral("✗ demo: cannot open the bundled conversation fixture"));
@@ -300,6 +312,10 @@ void AppController::reloadDemo()
 
 void AppController::applyState(const QJsonObject &state)
 {
+    // The old renderer bridge is demo scaffolding. It must never populate the
+    // native backend UI with fictional or unsolicited renderer state.
+    if (!m_options.demo)
+        return;
     const QJsonArray conversations = state.value(QStringLiteral("conversations")).toArray();
     m_conversations->setConversations(conversations);
 
@@ -351,6 +367,8 @@ void AppController::openConversation(const QString &id)
 
 bool AppController::sendMessage(const QString &text)
 {
+    if (!m_options.demo)
+        return false;
     const QString trimmed = text.trimmed();
     if (trimmed.isEmpty() || m_currentId.isEmpty())
         return false;

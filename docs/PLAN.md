@@ -1,106 +1,61 @@
-# Roadmap — lõi Zalo chính thức + Qt 6/QML
+# Roadmap — Qt/QML + backend Qt/C++
 
-**Quyết định hiện hành:** theo mô hình kiến trúc Olaz: tận dụng lõi JavaScript /
-renderer của Zalo PC chính thức, host bên trong Qt WebEngine, hiển thị giao diện
-native bằng Qt 6 Quick/QML. Đây là hướng chính duy nhất, không phải dự phòng.
+## Quyết định 2026-11-02
 
-Không tự viết lại giao thức Zalo, mã hóa chat, signaling hay media engine.
-C++ đảm nhiệm host, bridge có kiểm soát, model và tích hợp Linux. Nếu thiếu
-backend tương thích, ghi blocker hoặc tạm chưa hỗ trợ tính năng; không chuyển
-sang tự reverse-engineer giao thức. Hiểu API preload/IPC đủ để nối host là công
-việc tích hợp runtime, không phải xây một client giao thức độc lập.
+Giao diện dùng Qt 6 Quick/QML; backend là C++/Qt trực tiếp, không cần Chromium,
+Electron, Node, Rust sidecar hay renderer Zalo PC. Đây là client không chính
+thức: giao thức tự triển khai phải được bảo trì khi Zalo thay đổi, có thể vi
+phạm điều khoản hoặc ảnh hưởng tài khoản. Không hứa tương đương Zalo PC.
 
-Không chỉ mở `chat.zalo.me` và hiển thị giao diện Web. Browser engine là phụ
-thuộc có chủ đích để chạy lõi Zalo; không quảng bá ứng dụng là không Chromium.
-Mô hình Olaz là tham khảo kiến trúc, không phải quyền sao chép adapter của Olaz.
+Tham khảo [ctdozlite](https://github.com/ctdoteam1110/ctdozlite) tại commit
+`1345f5d0cfd24fdb7d54e5caf3a88e3e3b2acd4a`: nguồn được công bố MIT OR
+Apache-2.0. Khi port mã cần chọn điều kiện MIT, giữ bản quyền/thông báo và kiểm
+tra dependency phù hợp GPLv2 của repo. Luồng QR Web đang dựa trên probe C++
+trước đây; phần tạo request/đọc ticket PC được viết C++ theo contract ctdozlite,
+có lưu thông báo MIT và test offline, không kèm file Rust. Luồng Web khác luồng
+PC và `getLoginInfo`; không trộn khóa hay kết luận tương thích nếu chưa kiểm chứng.
 
-Checklist thực hiện: [TODO.md](TODO.md). Bằng chứng hiện có: [STATUS.md](STATUS.md)
-và [WALKTHROUGH.md](WALKTHROUGH.md). Các mốc dưới đây áp dụng cho hướng lõi chính
-thức; kết quả QR của probe cũ không được tính là hoàn thành login runtime.
+Mã, tài liệu, bằng chứng WebEngine/ASAR được giữ làm lịch sử và công cụ tùy
+chọn, không phải đường chạy sản phẩm. [Plan cũ](HISTORICAL-RUNTIME-PLAN.md),
+[checklist cũ](HISTORICAL-RUNTIME-TODO.md), [runtime evidence](RUNTIME-EVIDENCE.md).
 
-## M0 — nền Qt/QML và kiểm thử (đã có nền, còn việc hoàn thiện)
+## M0 — nền và quyết định
 
-- Giữ ASAR reader, runtime locator/manifest, bridge demo, model, shell QML và CLI.
-- Bảo toàn WIP, đối chiếu remote trước khi tích hợp, không xóa probe cũ trong
-  đợt sửa tài liệu. Tách demo, Web wrapper thử nghiệm và runtime host đích.
-- Smoke test phải phát hiện lỗi QML/Loader; test chạy trên profile riêng.
-- Chốt license, nguồn gốc và điều kiện sử dụng từng thành phần tích hợp.
-- Điều kiện đạt: shell/demo và test ổn định, không giả định demo là chat thật.
+- Giữ giao diện/model Qt, tách demo, chẩn đoán runtime và Web wrapper.
+- Build mặc định không dùng WebEngine; giữ probe QR lịch sử ngoài build mặc định.
+- Chốt provenance và license trước khi dùng hoặc port từng thành phần.
+- Chỉ công bố chức năng được test; không đưa mã/tài nguyên độc quyền hoặc bí mật
+  vào repo. Không tự chạy đăng nhập thật khi chưa có người dùng xác nhận.
 
-## M1 — runtime provisioning và kiểm chứng khả năng host
+## M1 — QR và phiên thử nghiệm
 
-- Dùng runtime người dùng cung cấp từ bộ cài Zalo chính thức; ưu tiên một phiên
-  bản macOS đã ghim để khảo sát. AppImage cộng đồng chỉ là nguồn tham khảo layout,
-  không được gọi là bản Zalo Linux chính thức.
-- Nhận diện đúng ASAR và thư mục app đã extract (`pc-dist`, `main-dist`, native
-  dependencies); không nhầm ASAR launcher với runtime đầy đủ.
-- Extract vào thư mục riêng; lưu nguồn, version, hash và kết quả xác minh nguồn.
-  Hash cục bộ không thay thế chữ ký hay hash vendor tin cậy.
-- Liệt kê API preload/IPC, storage và network thiết yếu; xác định dependency
-  macOS nào cần thay bằng host Linux hoặc implementation sẵn có được phép dùng.
-- Spike API đồng bộ: QWebChannel chỉ bất đồng bộ. XHR đồng bộ tới custom scheme
-  Qt đã trả lời được trong test transport; vẫn phải thiết kế `sendSync`/IPC an
-  toàn cho các kênh thực tế và không trả thành công giả.
-- Điều kiện đạt: runtime đã định danh, bootstrap tối thiểu chạy trong host thử
-  và các blocker sync/network/storage được ghi rõ trước khi làm UI thật.
+- Đưa luồng QR Web lịch sử vào backend C++ bất đồng bộ; QR/phiên chỉ trong RAM,
+  bắt đầu khi người dùng chủ động bấm, có hủy và timeout.
+- Giới hạn kích thước, TLS mặc định, chặn redirect ngoài HTTPS allowlist; test
+  transport/state bằng phản hồi giả offline, không log QR/cookie/token.
+- Phân tích luồng QR PC, `getLoginInfo`/khóa phiên và tính tương thích: **chưa
+  giả định** phiên Web đã đủ cho API chat.
+- Thiết kế bảo vệ phiên trong keyring, phục hồi, lỗi mạng và đăng xuất thực;
+  xóa phiên cục bộ không được gọi là revoke ở server.
+- Điều kiện đạt: QR → xác nhận → backend chat có phiên hợp lệ → restart/logout
+  được kiểm chứng thật, sau review và khi người dùng cho phép.
 
-## M2 — host renderer ẩn, bridge và QR của runtime
+## M2 — hội thoại và chat cơ bản
 
-- Đăng ký scheme riêng và handler Qt WebEngine, chỉ phục vụ runtime đã chọn.
-- Host bridge thay các API Electron/preload cần thiết, inject trước bootstrap;
-  phân quyền theo origin/frame/API, không cung cấp Node hoặc shell tùy ý.
-- Giữ HTTP/WebSocket, TLS, cookie và storage nhất quán cho lõi chính thức. Chỉ
-  thêm transport shim có giới hạn nếu host cần; không tự cài giao thức Zalo.
-- Kiểm chứng IndexedDB/SQLite và phụ thuộc Linux; không ép nhánh fallback chưa
-  được thử chỉ vì Olaz đã dùng nó ở macOS.
-- Lõi Zalo thực hiện login; QML hiển thị QR và trạng thái qua adapter. Profile
-  riêng, xác nhận thủ công trên điện thoại, không lấy cookie từ app khác.
-- Điều kiện đạt: QR, đăng nhập, restart và đăng xuất trên runtime chính thức;
-  không dùng URL hoặc kết quả probe cũ để kết luận đã đăng nhập.
+- HTTP, phiên/cookie và codec theo contract đã kiểm chứng; kiểm thử fixture và
+  lỗi với transport giả. Đánh giá license từng thư viện crypto trước phân phối.
+- Danh sách hội thoại, lịch sử có phân trang và model C++/QML; ID chuỗi, giới
+  hạn payload, phân biệt dữ liệu thật với demo.
+- WebSocket/reconnect, nhận và gửi text có xác nhận lỗi, không báo gửi thành công
+  giả; không tự động gửi tin trong test.
+- Điều kiện đạt: đọc/gửi/nhận/reconnect với tài khoản thử do người dùng duyệt.
 
-## M3 — đọc hội thoại và tin bằng UI native
+## M3 — tính năng, bảo mật và đóng gói
 
-- Adapter lấy trạng thái/service của runtime, chuyển dữ liệu có cấu trúc vào
-  model C++; QML hiển thị danh sách, unread, tìm kiếm, tin và phân trang.
-- ID chuỗi, cập nhật tăng dần, giới hạn payload và xử lý trạng thái lỗi; không
-  sao chép cả DOM vào giao diện chính.
-- Lõi chính thức là nguồn dữ liệu chuẩn; hạn chế tạo thêm kho chat riêng.
-  Cache nếu cần phải có chính sách bảo vệ/xóa dữ liệu.
-- Điều kiện đạt: đọc được hội thoại/tin thật, reconnect không trùng hoặc mất
-  trạng thái hiển thị; không trộn fixture demo với phiên thật.
+- Ảnh/file, reaction, reply, sticker, cache, desktop notifications theo mức đã
+  kiểm chứng. Lịch sử/phiên phải có chính sách bảo vệ và xóa riêng.
+- Kiểm chứng E2EE/sync trước khi tuyên bố hỗ trợ; mã hóa transport không chứng
+  minh mã hóa đầu cuối. Cuộc gọi là hạng mục riêng, chưa mặc định có.
+- Đo RAM/CPU, đóng gói native, test Wayland/X11 và rà soát security/license.
 
-## M4 — thao tác chat, file và desktop
-
-- Gửi text qua service chính thức, có xác nhận/lỗi; không gọi API giao thức tự viết.
-- Ảnh/file, reply, reaction, sticker theo khả năng runtime và bridge đã kiểm chứng.
-- Đồng bộ điện thoại và E2EE do lõi Zalo xử lý; kiểm chứng đầy đủ hoặc ghi chưa
-  hỗ trợ, không hứa tính năng chỉ vì đã tải được renderer.
-- Qt file picker, tải lên/xuống có xác nhận/tiến độ, notifications có chế độ ẩn
-  nội dung, tray, bộ gõ Việt, phím tắt Wayland/X11, logout và xóa dữ liệu an toàn.
-- Điều kiện đạt: luồng chat/file thật hoạt động qua UI QML và lõi chính thức.
-
-## M5 — cuộc gọi qua backend Linux có sẵn
-
-- Xác định helper/backend Linux tương thích, được phép sử dụng; ưu tiên thành
-  phần chính thức có thể chạy hoặc implementation cộng đồng đã có và phù hợp license.
-- `ZaloCall` macOS không chạy trực tiếp trên Linux. WebRTC trong Qt WebEngine
-  không tự động tương thích với backend gọi của Zalo PC.
-- Không tự dựng lại signaling, codec hay giao thức gọi. Nếu chưa có giải pháp
-  tích hợp khả thi, để cuộc gọi chưa hỗ trợ và tiếp tục bản chat.
-- Nếu có backend: thử thoại, video, thiết bị và screen sharing với UI QML.
-- Điều kiện đạt: các tính năng gọi được tuyên bố đều có kiểm chứng thực tế.
-
-## M6 — đóng gói, tương thích và hiệu năng
-
-- Pin runtime/adapter theo phiên bản, kiểm tra cập nhật và rollback an toàn;
-  lỗi tương thích phải báo rõ, không tự chạy runtime chưa được hỗ trợ.
-- `.deb` trước, AppImage/Flatpak và AppStream sau. Package chạy thật cần Qt
-  WebEngine/WebChannel; build không WebEngine chỉ dùng core/demo/tooling.
-- Kiểm thử binary đã đóng gói trên Ubuntu 26.04 amd64/KDE Wayland rồi GNOME/X11;
-  kiểm tra sandbox, profile, quyền thiết bị và đường dẫn XDG.
-- Đo tổng RAM/CPU mọi tiến trình, cold start, reconnect và chạy dài so với port
-  hiện tại. Native UI không bảo đảm nhẹ hơn khi vẫn chạy lõi renderer.
-- Không commit/phân phối lõi độc quyền, assets Zalo hoặc bí mật khi chưa có quyền;
-  tải/import runtime riêng từ nguồn hợp lệ. Kiểm tra license trước release.
-- Điều kiện đạt: chỉ phát hành tính năng đã thử, package không bị coi nhầm là
-  client hoàn chỉnh khi mới chạy demo.
+Checklist bằng chứng chi tiết: [TODO.md](TODO.md); hướng dẫn: [WALKTHROUGH.md](WALKTHROUGH.md).

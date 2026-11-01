@@ -14,6 +14,7 @@ class BridgeRouter;
 class ConversationFilterModel;
 class ConversationModel;
 class MessageModel;
+class NativeQrLogin;
 
 class AppController : public QObject
 {
@@ -22,6 +23,7 @@ class AppController : public QObject
     Q_PROPERTY(QAbstractItemModel *conversations READ conversations CONSTANT)
     Q_PROPERTY(QAbstractItemModel *messages READ messages CONSTANT)
     Q_PROPERTY(QObject *bridgeObject READ bridgeObject CONSTANT)
+    Q_PROPERTY(QObject *qrLogin READ qrLogin CONSTANT)
 
     Q_PROPERTY(QString currentId READ currentId NOTIFY currentChanged)
     Q_PROPERTY(QString currentTitle READ currentTitle NOTIFY currentChanged)
@@ -50,6 +52,7 @@ class AppController : public QObject
     Q_PROPERTY(bool demoMode READ demoMode CONSTANT)
     Q_PROPERTY(bool webMode READ webMode CONSTANT)
     Q_PROPERTY(bool nativeMode READ nativeMode CONSTANT)
+    Q_PROPERTY(bool runtimeDiagnosticsMode READ runtimeDiagnosticsMode CONSTANT)
     Q_PROPERTY(QString appMode READ appMode CONSTANT)
     Q_PROPERTY(bool rendererHostEnabled READ rendererHostEnabled CONSTANT)
     Q_PROPERTY(QString rendererUrl READ rendererUrl CONSTANT)
@@ -65,8 +68,8 @@ public:
         QString runtimeRoot;
         QString rendererUrl;
         bool demo = false;
-        // Explicit opt-in for the visible Zalo Web experiment. The default is
-        // the native runtime shell; the Web wrapper is never the target UI.
+        bool runtimeDiagnostics = false;
+        // Explicit opt-in for the historical visible Web experiment.
         bool webMode = false;
     };
 
@@ -75,6 +78,8 @@ public:
     QAbstractItemModel *conversations();
     QAbstractItemModel *messages();
     QObject *bridgeObject();
+    QObject *qrLogin();
+    NativeQrLogin *nativeQrLogin() const { return m_qrLogin; }
 
     QString currentId() const { return m_currentId; }
     QString currentTitle() const { return m_currentTitle; }
@@ -100,7 +105,8 @@ public:
 
     bool demoMode() const { return m_options.demo; }
     bool webMode() const { return m_options.webMode; }
-    bool nativeMode() const { return !m_options.demo && !m_options.webMode; }
+    bool nativeMode() const { return !m_options.demo && !m_options.webMode && !m_options.runtimeDiagnostics; }
+    bool runtimeDiagnosticsMode() const { return !m_options.demo && !m_options.webMode && m_options.runtimeDiagnostics; }
     QString appMode() const;
     bool rendererHostEnabled() const;
     QString rendererUrl() const;
@@ -146,6 +152,7 @@ private:
     ConversationModel *m_conversations = nullptr;
     ConversationFilterModel *m_filter = nullptr;
     MessageModel *m_messages = nullptr;
+    NativeQrLogin *m_qrLogin = nullptr;
 
     QHash<QString, QJsonArray> m_messagesById;
     QString m_currentId;

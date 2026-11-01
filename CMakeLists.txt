@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.24)
 
 project(ZaloNative
     VERSION 1.0.0
-    DESCRIPTION "Native Qt 6/QML shell and runtime tooling for an experimental Zalo desktop client on Linux"
+    DESCRIPTION "Experimental native Qt 6/QML Zalo client for Linux"
     LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -19,7 +19,7 @@ include(CTest)
 
 option(ZALO_BUILD_TESTS "Build the test suite" ON)
 option(ZALO_ENABLE_SANITIZERS "Build with AddressSanitizer/UBSan (GCC/Clang only)" OFF)
-option(ZALO_WEBENGINE "Build the optional Qt WebEngine renderer host" ON)
+option(ZALO_WEBENGINE "Build the optional historical Qt WebEngine diagnostics and Web wrapper" OFF)
 option(ZALO_BUILD_QR_PROBE "Build the archived experimental QR probe (historical reference only)" OFF)
 
 if(ZALO_ENABLE_SANITIZERS AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -43,6 +43,7 @@ if(ZALO_WEBENGINE)
 endif()
 
 add_subdirectory(src/core)
+add_subdirectory(src/backend)
 add_subdirectory(src/cli)
 
 if(ZALO_BUILD_QR_PROBE)
@@ -64,6 +65,7 @@ set(APP_QML_FILES
     qml/ConversationDelegate.qml
     qml/ChatPane.qml
     qml/MessageDelegate.qml
+    qml/NativeShell.qml
     qml/Avatar.qml
     qml/Icon.qml
     qml/IconButton.qml
@@ -82,6 +84,8 @@ qt_add_executable(zalonative
     src/app/main.cpp
     src/app/AppController.cpp
     src/app/AppController.h
+    src/app/QrImageProvider.cpp
+    src/app/QrImageProvider.h
 )
 
 qt_add_qml_module(zalonative
@@ -98,6 +102,7 @@ qt_add_qml_module(zalonative
 
 target_link_libraries(zalonative PRIVATE
     zalonative_core
+    zalonative_backend
     Qt6::Gui
     Qt6::Qml
     Qt6::Quick
@@ -131,6 +136,10 @@ endif()
 install(TARGETS zalonative RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES packaging/io.github.quytttb.ZaloNative.desktop
         DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+install(FILES LICENSE NOTICE.md
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/zalo-native-linux)
+install(FILES third_party/ctdozlite/LICENSE-MIT
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/zalo-native-linux/third_party/ctdozlite)
 install(FILES qml/icons/app.svg
         DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps
         RENAME io.github.quytttb.ZaloNative.svg)

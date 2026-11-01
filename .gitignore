@@ -1,4 +1,5 @@
 /build/
+/build-web/
 cmake-build-*/
 *.user
 .vscode/

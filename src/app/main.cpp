@@ -1,4 +1,5 @@
 #include "AppController.h"
+#include "QrImageProvider.h"
 
 #include <QCommandLineParser>
 #include <QGuiApplication>
@@ -81,16 +82,18 @@ int main(int argc, char *argv[])
 
     QCommandLineParser parser;
     parser.setApplicationDescription(
-        QStringLiteral("Unofficial Qt 6 host for a user-supplied Zalo desktop runtime, with a "
-                       "native Qt Quick interface. The visible Web wrapper is experimental."));
+        QStringLiteral("Unofficial experimental native Qt 6/QML Zalo client. "
+                       "The WebEngine modes are historical diagnostics."));
     parser.addHelpOption();
     parser.addVersionOption();
     parser.addOption({QStringLiteral("runtime"),
-                      QStringLiteral("Path to an extracted Zalo application directory or app.asar."),
+                      QStringLiteral("Inspect an extracted Zalo application directory or app.asar "
+                                     "in historical runtime diagnostics mode."),
                       QStringLiteral("path")});
+    parser.addOption({QStringLiteral("runtime-diagnostics"),
+                      QStringLiteral("Open historical runtime inspection instead of the native backend.")});
     parser.addOption({QStringLiteral("demo"),
-                      QStringLiteral("Show the bundled demonstration conversations instead of "
-                                     "opening a runtime.")});
+                      QStringLiteral("Show bundled fictional demonstration conversations.")});
     parser.addOption({QStringLiteral("web"),
                       QStringLiteral("Open the experimental visible Zalo Web wrapper "
                                      "(chat.zalo.me). This is not the target native UI.")});
@@ -115,14 +118,17 @@ int main(int argc, char *argv[])
     options.runtimeRoot = parser.value(QStringLiteral("runtime"));
     options.demo = parser.isSet(QStringLiteral("demo"));
     options.webMode = parser.isSet(QStringLiteral("web"));
+    options.runtimeDiagnostics = parser.isSet(QStringLiteral("runtime-diagnostics"))
+        || parser.isSet(QStringLiteral("runtime"));
     if (options.webMode)
         options.rendererUrl = parser.value(QStringLiteral("url"));
     else if (!parser.value(QStringLiteral("url")).isEmpty())
-        qWarning("--url is ignored without --web; the native runtime host does not open a URL.");
+        qWarning("--url is ignored without --web.");
 
     if (selfTest) {
-        options.demo = false;
+        options.demo = true;
         options.webMode = false;
+        options.runtimeDiagnostics = false;
         ZaloNative::AppController controller(options);
         controller.reloadDemo();
         const bool ok = controller.conversationCount() > 0 && controller.messageCount() > 0;
@@ -142,6 +148,7 @@ int main(int argc, char *argv[])
     QQuickStyle::setStyle(QStringLiteral("Basic"));
 
     QQmlApplicationEngine engine;
+    engine.addImageProvider(QStringLiteral("nativeqr"), new ZaloNative::QrImageProvider(controller.nativeQrLogin()));
     engine.loadFromModule("ZaloNative", "Main");
     if (engine.rootObjects().isEmpty()) {
         qCritical("Could not load the ZaloNative QML module.");

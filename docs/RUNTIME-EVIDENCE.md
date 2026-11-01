@@ -1,15 +1,17 @@
 # Runtime evidence — imported app directory and bootstrap probe
 
+**Historical WebEngine research**, retained after the 2026-11-02 switch to a
+direct Qt/C++ backend. It does not establish compatibility of the new backend.
+
 **Date:** 2026-10-30
 **Status:** diagnostic evidence only. This does **not** verify an official Linux
 Zalo runtime, authenticate the vendor, log in, or prove host compatibility.
 
 ## Runtime under test
 
-The only runtime available on this machine came from a community AppImage. It is
-**not** an official Zalo Linux release and its provenance is unverified. No
-official Zalo PC installer was available, so the source-selection item in
-[M1](TODO.md) remains open.
+This first reference runtime came from a community AppImage. It is **not** an
+official Zalo Linux release and its provenance is unverified. A later macOS DMG
+downloaded via Zalo's site is discussed separately below.
 
 ```text
 app version        26.10.20

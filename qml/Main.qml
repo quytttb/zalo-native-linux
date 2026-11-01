@@ -30,7 +30,7 @@ Window {
         onActivated: {
             if (realShell.item && realShell.item.reload)
                 realShell.item.reload();
-            else if (App.nativeMode)
+            else if (App.runtimeDiagnosticsMode)
                 App.refreshRuntime();
         }
     }
@@ -103,7 +103,7 @@ Window {
         }
 
         // ------------------------------------------------------------------
-        // Native runtime host (default) and the explicit experimental Web mode
+        // Native C++ backend by default; legacy diagnostics and Web are opt-in.
         // ------------------------------------------------------------------
         Loader {
             id: realShell
@@ -111,7 +111,7 @@ Window {
             visible: !App.demoMode
             source: App.webMode
                     ? (App.rendererHostEnabled ? "WebShell.qml" : "WebUnavailable.qml")
-                    : (App.rendererHostEnabled ? "RuntimeShell.qml" : "WebUnavailable.qml")
+                    : (App.runtimeDiagnosticsMode ? "RuntimeShell.qml" : "NativeShell.qml")
 
             onStatusChanged: {
                 if (status === Loader.Error)

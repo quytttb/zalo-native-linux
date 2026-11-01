@@ -146,13 +146,15 @@ Dialog {
                                 Text {
                                     text: App.demoMode
                                           ? "Đang chạy dữ liệu demo"
-                                          : (App.webMode
+                                          : (App.nativeMode
+                                             ? "Backend Qt/C++ thử nghiệm"
+                                             : (App.webMode
                                              ? (App.rendererState === "ready" ? "Trang Zalo Web đã tải"
                                                 : (App.rendererState === "error" ? "Không tải được Zalo"
                                                    : "Đang mở Zalo Web"))
                                              : (App.runtimeHasCore ? "Đã nhận diện lõi Zalo PC"
                                                 : (App.runtimeDetected ? "Runtime không host được"
-                                                   : "Chưa có runtime")))
+                                                   : "Chưa có runtime"))))
                                     color: Theme.text
                                     font.pixelSize: 13
                                     font.weight: Font.DemiBold
@@ -161,7 +163,7 @@ Dialog {
 
                             Text {
                                 Layout.fillWidth: true
-                                text: App.demoMode ? App.runtimeStatus : App.modeLabel
+                                text: App.nativeMode ? App.qrLogin.status : App.modeLabel
                                 color: Theme.textMuted
                                 font.pixelSize: 12
                                 wrapMode: Text.Wrap
@@ -190,27 +192,30 @@ Dialog {
                         FieldLabel { text: "Chế độ" }
                         FieldValue { text: App.modeLabel }
 
-                        FieldLabel { text: "Khung hiển thị" }
+                        FieldLabel { text: App.nativeMode ? "Backend" : "Khung hiển thị" }
                         FieldValue {
-                            text: App.rendererHostEnabled
-                                  ? "Qt WebEngine có trong bản build"
-                                  : "Không có trong bản build này"
+                            text: App.nativeMode ? "Qt/C++ trực tiếp, không cần renderer Zalo PC"
+                                  : (App.rendererHostEnabled ? "Qt WebEngine có trong bản build"
+                                     : "Không có trong bản build này")
                         }
 
-                        FieldLabel { text: "Phiên bản runtime" }
+                        FieldLabel { text: "Phiên bản runtime"; visible: App.runtimeDiagnosticsMode }
                         FieldValue {
+                            visible: App.runtimeDiagnosticsMode
                             text: App.runtimeAppVersion.length > 0
                                   ? App.runtimeAppVersion : "(chưa nhận diện)"
                         }
 
-                        FieldLabel { text: "Entry HTML" }
+                        FieldLabel { text: "Entry HTML"; visible: App.runtimeDiagnosticsMode }
                         FieldValue {
+                            visible: App.runtimeDiagnosticsMode
                             text: App.runtimeEntryHtml.length > 0
                                   ? App.runtimeEntryHtml : "(không có)"
                         }
 
-                        FieldLabel { text: "Preload / sync" }
+                        FieldLabel { text: "Preload / sync"; visible: App.runtimeDiagnosticsMode }
                         FieldValue {
+                            visible: App.runtimeDiagnosticsMode
                             text: App.runtimeExposedApiCount + " API · "
                                   + App.runtimeSyncCallSites + " sync call site ("
                                   + App.runtimeDynamicSyncCalls + " kênh động)"
@@ -220,14 +225,14 @@ Dialog {
                         FieldValue {
                             text: App.webMode
                                   ? (App.currentPageUrl.length > 0 ? App.currentPageUrl : "(chưa tải)")
-                                  : "Không áp dụng — chế độ runtime native"
+                                  : "Không áp dụng"
                         }
 
                         FieldLabel { text: "Hội thoại / tin nhắn" }
                         FieldValue {
                             text: App.demoMode
                                   ? App.conversationCount + " / " + App.messageCount
-                                  : "Chưa có model chat thật; runtime chưa được host"
+                                  : "Chưa có dữ liệu chat thật"
                         }
                     }
 
@@ -235,9 +240,11 @@ Dialog {
                         Layout.fillWidth: true
                         Layout.topMargin: 4
                         text: "Ứng dụng không chính thức, không liên kết với VNG. "
-                              + (App.webMode
-                                 ? "Chế độ Web thử nghiệm mở trang Zalo Web chính thức; cookie phiên chỉ nằm trong profile cục bộ và không được ghi vào nhật ký."
-                                 : "Runtime do người dùng cung cấp; bộ đọc không chạy mã runtime và hash cục bộ không xác thực nhà phát hành.")
+                               + (App.webMode
+                                  ? "Chế độ Web thử nghiệm mở trang Zalo Web chính thức; cookie phiên chỉ nằm trong profile cục bộ và không được ghi vào nhật ký."
+                                  : (App.runtimeDiagnosticsMode
+                                     ? "Runtime do người dùng cung cấp; hash cục bộ không xác thực nhà phát hành."
+                                     : "Backend C++ đang thử nghiệm, chưa hỗ trợ chat thật."))
                         color: Theme.textFaint
                         font.pixelSize: 11
                         wrapMode: Text.Wrap
@@ -251,15 +258,12 @@ Dialog {
 
                 TextArea {
                     readOnly: true
-                    text: App.runtimeDetected
-                          ? App.runtimeManifestJson
-                          : "Không có manifest runtime Zalo PC. Đây là chế độ runtime native, "
-                            + "không mở Zalo Web và không dùng dữ liệu demo.\n\n"
-                            + "Đặt lõi đã giải nén vào:\n"
-                            + "$XDG_DATA_HOME/zalo-native/runtime\n"
-                            + "hoặc chạy zalonative --runtime <app-dir>.\n\n"
-                            + "Dùng `zalort inspect <app-dir>` để xem inventory preload/IPC và "
-                            + "`zalort import` để tạo bản sao có hash."
+                    text: App.runtimeDiagnosticsMode
+                          ? (App.runtimeDetected ? App.runtimeManifestJson
+                             : "Không có manifest runtime. Đây là công cụ nghiên cứu lịch sử; "
+                               + "dùng `zalort inspect <app-dir>` để kiểm tra nguồn do người dùng cung cấp.")
+                          : "Backend Qt/C++ mặc định không cần runtime Zalo PC. "
+                            + "Chạy `zalonative --runtime-diagnostics` để mở công cụ nghiên cứu lịch sử."
                     color: Theme.text
                     font.family: "monospace"
                     font.pixelSize: 12
@@ -283,7 +287,7 @@ Dialog {
 
                     Text {
                         Layout.fillWidth: true
-                        text: "Hoạt động gần đây của shell và WebEngine. Nội dung chat, cookie và token không được ghi."
+                        text: "Hoạt động gần đây của shell. QR, cookie và token không được ghi."
                         color: Theme.textMuted
                         font.pixelSize: 12
                     }

@@ -98,7 +98,8 @@ jobs:
           tag_name: ${{ needs.build-deb.outputs.tag }}
           generate_release_notes: true
           body: |
-            Experimental demo only; not connected to Zalo. Unofficial and not affiliated with VNG.
+            Experimental unofficial Qt/C++ client, not yet a working chat app. The QR screen
+            contacts Zalo only after the user explicitly starts it; real login is unverified.
             This package targets Ubuntu 26.04 amd64; verify SHA256SUMS before installation.
           files: |
             release-assets/*.deb

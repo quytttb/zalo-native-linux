@@ -18,6 +18,35 @@ add_zalo_test(test_scheme)
 add_zalo_test(test_preload)
 add_zalo_test(test_importer)
 
+# All QR requests are handled by an in-memory QNetworkAccessManager double.
+# These tests do not contact Zalo or use any account/session data.
+add_executable(test_native_qr test_native_qr.cpp)
+target_link_libraries(test_native_qr PRIVATE zalonative_backend Qt6::Test)
+add_test(NAME test_native_qr COMMAND test_native_qr)
+set_tests_properties(test_native_qr PROPERTIES TIMEOUT 30)
+
+add_executable(test_pc_qr_protocol test_pc_qr_protocol.cpp)
+target_link_libraries(test_pc_qr_protocol PRIVATE zalonative_backend Qt6::Test)
+add_test(NAME test_pc_qr_protocol COMMAND test_pc_qr_protocol)
+
+add_executable(test_app_modes test_app_modes.cpp ../src/app/AppController.cpp ../src/app/AppController.h)
+target_include_directories(test_app_modes PRIVATE ../src/app)
+target_link_libraries(test_app_modes PRIVATE zalonative_core zalonative_backend Qt6::Test)
+qt_add_resources(test_app_modes "test_demo_fixture"
+    PREFIX "/qt/qml/ZaloNative"
+    BASE "${CMAKE_SOURCE_DIR}"
+    FILES "${CMAKE_SOURCE_DIR}/renderer/demo-state.json")
+add_test(NAME test_app_modes COMMAND test_app_modes)
+
+add_executable(test_native_qr_qml test_native_qr_qml.cpp ../src/app/QrImageProvider.cpp)
+target_include_directories(test_native_qr_qml PRIVATE ../src/app)
+target_link_libraries(test_native_qr_qml PRIVATE zalonative_backend Qt6::Test Qt6::Qml Qt6::Quick Qt6::QuickControls2)
+target_compile_definitions(test_native_qr_qml PRIVATE ZALO_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME test_native_qr_qml COMMAND test_native_qr_qml)
+set_tests_properties(test_native_qr_qml PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software"
+    TIMEOUT 30)
+
 # M1 sync spike: only meaningful in a build that actually has WebEngine.
 if(ZALO_HAVE_WEBENGINE)
     add_executable(test_sync_scheme test_sync_scheme.cpp)
@@ -79,12 +108,13 @@ if(TARGET zalonative)
     add_test(NAME app_self_test COMMAND zalonative --self-test)
     add_test(NAME app_smoke_test COMMAND zalonative --smoke-test --demo)
     add_test(NAME app_native_smoke_test COMMAND zalonative --smoke-test)
+    add_test(NAME app_runtime_diagnostics_smoke_test COMMAND zalonative --smoke-test --runtime-diagnostics)
     add_test(NAME app_web_smoke_test COMMAND zalonative --smoke-test --web)
-    set_tests_properties(app_self_test app_smoke_test app_native_smoke_test app_web_smoke_test
+    set_tests_properties(app_self_test app_smoke_test app_native_smoke_test app_runtime_diagnostics_smoke_test app_web_smoke_test
         PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_LOGGING_RULES=qt.qml.binding.removal.info=false"
         TIMEOUT 30)
-    set_tests_properties(app_smoke_test app_native_smoke_test app_web_smoke_test PROPERTIES
+    set_tests_properties(app_smoke_test app_native_smoke_test app_runtime_diagnostics_smoke_test app_web_smoke_test PROPERTIES
         FAIL_REGULAR_EXPRESSION "ReferenceError;TypeError;Unable to assign;Cannot assign;Cannot anchor;failed to load component;is not a type;module .* is not installed")
 
     # Negative control: the strict smoke-test handler must turn a QML warning

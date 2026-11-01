@@ -1,9 +1,9 @@
 # Runtime handling
 
-This is the core of the chosen Olaz-style architecture: a user-supplied Zalo PC
-JavaScript/renderer core in Qt WebEngine, with native Qt 6/QML UI. Runtime
-detection, isolated import and static inventory now exist. A compatible host and
-bootstrap are still open.
+**Historical, optional tooling.** The earlier architecture investigated a
+user-supplied Zalo PC renderer in Qt WebEngine. As of 2026-11-02 the chosen
+backend is direct Qt/C++; runtime detection/import below are retained research,
+not required for the default app. See [PLAN.md](PLAN.md).
 
 Latest measured inventory and bootstrap output: [RUNTIME-EVIDENCE.md](RUNTIME-EVIDENCE.md).
 

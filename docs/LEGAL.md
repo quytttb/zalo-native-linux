@@ -1,33 +1,32 @@
-# Legal
+# Legal and provenance
 
-- This project is **unofficial** and not affiliated with, endorsed by, or
-  connected to VNG Corporation or Zalo.
-- The repository contains **no Zalo code, binaries, branding assets, session
-  data, or credentials**. Demo content is fictional and written for this
-  project.
-- Users supply their own official Zalo runtime (installed from Zalo's own
-  distribution channels). Runtime inspection/import does not execute it. The
-  diagnostic bootstrap probe loads the entry document without host APIs by
-  default; its opt-in diagnostic modes only exercise bounded local filesystem/
-  store calls in an isolated temporary root, and the
-  chosen product architecture will execute the supplied JavaScript core inside Qt
-  WebEngine. Import/download, execution and redistribution have separate legal
-  conditions; do not assume a right to redistribute the runtime, branding or
-  assets.
-- Using a third-party client may violate Zalo's Terms of Service. Account
-  restrictions, forced logout, or loss of functionality are the user's risk.
-- Do not commit session files, tokens, cookies, phone numbers, or chat
-  exports. Do not automate login, scraping, spam, or bulk messaging.
-- The chosen direction reuses the official core, not an independently recovered
-  Zalo protocol. Host integration may require understanding preload/IPC contracts;
-  keep that work within applicable law and license terms. There is no roadmap
-  to reverse-engineer chat encryption, synchronization or a call protocol.
-- Olaz is an architectural reference. Its distributed scripts are not a grant
-  of permission to copy or redistribute them. Implement or license the required
-  host/adapters rather than copying unlicensed source.
-- Preserve the project's current GPLv2 terms; review the license/provenance of
-  each dependency and any existing Linux helper before integrating or shipping.
-  The archived GPLv3 Zalo10 study is not permission to combine its code with
-  GPL-2.0-only code. Do not relicense the project without authorization.
-- The direct-protocol QR probe is a discontinued historical experiment. It is
-  not the chosen backend and its temporary session is not a runtime profile.
+- This is an unofficial client, not affiliated with or endorsed by VNG/Zalo.
+  Use of an unofficial client may violate service terms or lead to session/account
+  restrictions. The user decides whether to test with an account.
+- The chosen architecture is a direct Qt/C++ implementation of unofficial
+  protocol compatibility, not a supplied official renderer. Do not claim Zalo
+  approval, complete compatibility or E2EE without evidence.
+- The current Web QR sequence is adapted from this project's historical C++
+  probe. That independent probe cited [zca-js `loginQR.ts` (MIT), commit
+  `2a7e360257dfe98e2eb48dc46bbf389834be7e0b`](https://github.com/RFS-ADRENO/zca-js/blob/2a7e360257dfe98e2eb48dc46bbf389834be7e0b/src/apis/loginQR.ts).
+  No upstream zca-js source is bundled.
+- [ctdozlite](https://github.com/ctdoteam1110/ctdozlite) commit
+  `1345f5d0cfd24fdb7d54e5caf3a88e3e3b2acd4a` is a reference, published as
+  MIT OR Apache-2.0. The PC QR request/ticket codec is independently written in
+  C++ using its documented contract; no Rust source file is bundled. The MIT
+  copyright and license are retained in `third_party/ctdozlite/LICENSE-MIT` and
+  installed with the app. If more source is adapted or translated, document
+  provenance, select applicable
+  terms, preserve notices and check all dependencies. MIT is the branch to
+  evaluate for this GPLv2-only project; Apache-2.0 code combined with it may be
+  incompatible. A repository's top-level license is not a substitute for
+  reviewing individual files and transitive dependencies.
+- Retain GPLv2 terms in [NOTICE.md](../NOTICE.md); do not relicense without
+  authorization. Review Qt, TLS/crypto and packaging licenses before release;
+  the old optional OpenSSL-based probe does not settle that review.
+- Never commit proprietary Zalo/Olaz code or assets, DMGs, user data, QR payloads,
+  cookies, session tokens, encryption keys or logs containing them. Do not
+  automate unattended login, scraping, spam or bulk messaging.
+- The historical WebEngine runtime/Olaz material remains separate. Its presence
+  is not permission to copy or redistribute proprietary runtime or Olaz code.
+  See [HISTORICAL-RUNTIME-LEGAL.md](HISTORICAL-RUNTIME-LEGAL.md).
