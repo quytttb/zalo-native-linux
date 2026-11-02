@@ -34,6 +34,12 @@ on the development machine emits QTP0004 and QML plugin link-target configure
 warnings; smoke tests pass locally, but packaged QML dependencies still need
 verification on target systems.
 
+The earlier local pass used an ignored `.so` fixture that was absent on GitHub,
+causing `test_runtime` to fail there. The test now creates a fictional library
+entry in a temporary directory. A clean Git-tracked source export plus the test
+change passed **22/22** with no `.so` in its source fixtures; consult GitHub
+Actions for the latest remote CI result.
+
 ## App modes
 
 ```bash

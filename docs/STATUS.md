@@ -37,5 +37,11 @@ observed `system-time` rejection; that result is not native-backend evidence.
 The three new QR tests also passed under ASan/UBSan with leak detection disabled;
 this is not a leak or security audit.
 
+The earlier local pass silently relied on an ignored `libfake.so` fixture, so
+GitHub Actions for `f25b874` failed `test_runtime` in a clean checkout. The test
+now generates a fictional file in a temporary directory; a Git-tracked source
+export plus this test change passes **22/22** without that source fixture. Check
+GitHub Actions for the current CI result.
+
 See [TODO.md](TODO.md) and [WALKTHROUGH.md](WALKTHROUGH.md). The old status is
 preserved at [HISTORICAL-RUNTIME-STATUS.md](HISTORICAL-RUNTIME-STATUS.md).

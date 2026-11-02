@@ -12,7 +12,11 @@ giữ tại [HISTORICAL-RUNTIME-TODO.md](HISTORICAL-RUNTIME-TODO.md).
 - [x] Chặn bridge/state demo và gửi tin giả trong chế độ native; có test tách mode.
 - [x] WebEngine mặc định `OFF`; giữ `ZALO_BUILD_QR_PROBE=OFF` và mã nghiên cứu cũ.
 - [x] Fresh default build/test **22/22**; build WebEngine lịch sử **25/25**
-  (2026-11-02). Kiểm tra binary default không link WebEngine/WebChannel.
+  (2026-11-02). Kiểm tra binary default không link WebEngine/WebChannel. Lượt
+  test này còn phụ thuộc fixture `.so` bị Git bỏ qua nên không chứng minh CI sạch.
+- [x] Sửa `test_runtime` tự tạo fixture `.so` trong thư mục tạm; kiểm tra lại
+  bản xuất chỉ gồm file Git cùng bản sửa test: **22/22**, không có `.so` trong
+  source fixture. Xem GitHub Actions để biết trạng thái CI mới nhất.
 - [x] Ghi nguồn ctdozlite commit `1345f5d`, giữ thông báo MIT cho contract QR PC;
   chưa khẳng định toàn bộ dependency phù hợp license.
 - [ ] Rà soát bảo mật, license Qt/TLS/crypto và đóng gói trước phát hành.

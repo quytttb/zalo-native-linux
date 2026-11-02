@@ -81,11 +81,22 @@ void RuntimeTest::locatesCheckedInRuntime()
 
 void RuntimeTest::locatesExtractedAppDirectory()
 {
-    const QString fixture = QStringLiteral(ZALO_TEST_FIXTURES "/app-runtime");
-    QVERIFY2(QFileInfo::exists(fixture), qPrintable(fixture));
+    const QString source = QStringLiteral(ZALO_TEST_FIXTURES "/app-runtime");
+    QVERIFY2(QFileInfo::exists(source), qPrintable(source));
+    QTemporaryDir fixture;
+    QVERIFY(fixture.isValid());
+    copyDirectory(source, fixture.path());
+    QVERIFY(QDir().mkpath(fixture.path() + QStringLiteral("/native")));
+    // Generate a fictional native-library entry in the private test directory.
+    // The repo ignores *.so, so a checked-out fixture cannot provide this file.
+    QFile library(fixture.path() + QStringLiteral("/native/libfake.so"));
+    QVERIFY(library.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    const QByteArray contents = QByteArrayLiteral("fictional native library fixture\n");
+    QCOMPARE(library.write(contents), qint64(contents.size()));
+    library.close();
 
     QString error;
-    const auto manifest = RuntimeLocator::locate(fixture, &error);
+    const auto manifest = RuntimeLocator::locate(fixture.path(), &error);
     QVERIFY2(manifest.has_value(), qPrintable(error));
 
     QVERIFY(manifest->isValid());
@@ -95,7 +106,7 @@ void RuntimeTest::locatesExtractedAppDirectory()
     QCOMPARE(manifest->entryHtml, QStringLiteral("pc-dist/index.html"));
     QCOMPARE(manifest->mainEntry, QStringLiteral("bootstrap.js"));
     QCOMPARE(manifest->buildCommit, QStringLiteral("fixture"));
-    QCOMPARE(manifest->appDir, QFileInfo(fixture).absoluteFilePath());
+    QCOMPARE(manifest->appDir, QFileInfo(fixture.path()).absoluteFilePath());
 
     QVERIFY(manifest->preloads.exposedApis.contains(QStringLiteral("$zapp")));
     QVERIFY(manifest->preloads.exposedApis.contains(QStringLiteral("$zlogger")));
